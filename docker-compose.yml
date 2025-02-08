@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  cli:
+    build: ./cli
+    depends_on:
+      - api
+    environment:
+      - API_URL=http://api:8000
+
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - code-analyzer
+      - ai-module
+    environment:
+      - CODE_ANALYZER_URL=http://code-analyzer:5000
+      - AI_MODULE_URL=http://ai-module:6000
+
+  code-analyzer:
+    build: ./microservices/code-analyzer
+    volumes:
+      - ./shared:/app/shared  # Pasta compartilhada para resultados
+    ports:
+      - "5000:5000"
+
+  ai-module:
+    build: ./microservices/ai-module
+    ports:
+      - "6000:6000"
