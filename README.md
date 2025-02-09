@@ -1,4 +1,3 @@
-```
 # Refactool
 
 ![Refactool](https://img.shields.io/badge/Refactool-API-green)
