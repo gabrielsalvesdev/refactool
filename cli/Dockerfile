@@ -1,7 +1,7 @@
 # cli/Dockerfile
 FROM python:3.9-slim
 WORKDIR /app
-COPY cli/src/requirements.txt .
+COPY src/requirements.txt .
 RUN pip install -r requirements.txt
-COPY cli/src/ .
+COPY src/ .
 ENTRYPOINT ["python", "main.py"]
