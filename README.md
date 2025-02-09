@@ -157,7 +157,7 @@ Contribuições são bem-vindas! Siga os passos abaixo para contribuir com o pro
 
 ## 📄 Licença
 
-Esse projeto está sob a licença MIT. Veja o arquivo  [LICENSE](https://github.com/gabrielsalvesdev/refactool/blob/main/LICENSE)  para mais detalhes.
+Este projeto é licenciado sob a GNU Lesser General Public License v3.0.  [LICENSE]([https://github.com/gabrielsalvesdev/refactool/blob/main/LICENCE)  para mais detalhes.
 
 ----------
 
