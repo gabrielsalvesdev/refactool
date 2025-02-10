@@ -28,7 +28,7 @@ def cli():
 def analyze(path, output_format):
     logger.info("Análise solicitada", path=path, user=os.getenv('USER'), output_format=output_format)
     api_url = os.getenv("API_URL", "http://localhost:8000")
-    response = requests.post(f"{api_url}/analyze", json={"path": path})
+    response = requests.post(f"{api_url}/analyze", json={"path": path}, headers={"Authorization": "dummy"})
     if response.status_code == 200:
         click.echo(response.json())
     elif response.status_code == 403:

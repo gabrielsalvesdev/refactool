@@ -32,7 +32,7 @@ Clone o repositório e inicie os containers:
 ```sh
 git clone https://github.com/gabrielsalvesdev/refactool
 cd refactool
-docker-compose up -d
+docker compose up -d
 
 ```
 
@@ -123,6 +123,21 @@ Este comando retorna o status atual da tarefa, permitindo que você acompanhe o 
   "task_id": "12345"
 }
 ```
+
+#### Chamada via cURL
+
+Você pode chamar a API utilizando o seguinte comando via cURL:
+
+```sh
+curl -v -H 'Authorization: dummy' -d '{"path":"/caminhodoprojeto"}' -H 'Content-Type: application/json' http://localhost:8000/analyze | cat
+```
+
+Explicação:
+- O parâmetro `-v` ativa o modo verbose, exibindo detalhes da requisição e da resposta.
+- A opção `-H 'Authorization: dummy'` define o header de autorização (necessário para o endpoint, conforme implementado na API).
+- A opção `-d '{"path":"/caminhodoprojeto"}'` envia o corpo da requisição em formato JSON com a chave "path", onde você deve substituir "/caminhodoprojeto" pelo caminho do projeto real.
+- A opção `-H 'Content-Type: application/json'` garante que o servidor saiba que o payload está em JSON.
+- O comando `| cat` é usado para garantir que toda a saída seja enviada para o terminal.
 
 ### Consultar Status
 

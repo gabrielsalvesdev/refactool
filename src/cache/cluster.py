@@ -1,10 +1,10 @@
-from rediscluster import RedisCluster
+import os
+from redis import Redis
 
-cluster = RedisCluster(
-    startup_nodes=[
-        {"host": "redis-node1", "port": 7000},
-        {"host": "redis-node2", "port": 7001}
-    ],
-    decode_responses=False,
-    password="SECRET"
+# Configurar o cliente Redis para o cluster LRU
+cluster = Redis(
+    host=os.getenv('REDIS_HOST', 'redis'),
+    port=int(os.getenv('REDIS_PORT', 6379)),
+    db=0,  # Use database 0 (pode ser ajustado conforme necessário)
+    decode_responses=True
 ) 

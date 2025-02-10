@@ -112,7 +112,7 @@ try:
     rb = Client()
 except Exception as e:
     rb = None
-    logger.warning("RedisBloom não disponível", exc_info=e)
+    logger.warning("RedisBloom não disponível")
 
 @celery.task(bind=True, name="analyze_code_task_with_bloom", autoretry_for=(subprocess.TimeoutExpired,), max_retries=3)
 def analyze_code_task_with_bloom(self, project_path: str):
