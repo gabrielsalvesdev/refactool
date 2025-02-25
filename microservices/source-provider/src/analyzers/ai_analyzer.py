@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 import structlog
 
-from .ai_providers import AIProvider, DeepSeekProvider, OllamaProvider
+from .ai_providers import AIProvider, OpenAIProvider, OllamaProvider
 
 logger = structlog.get_logger()
 
 @dataclass
 class AIAnalysisConfig:
     """Configuração para análise com IA."""
-    provider: Union[DeepSeekProvider, OllamaProvider]
+    provider: Union[OpenAIProvider, OllamaProvider]
     temperature: float = 0.3
     max_tokens: int = 1000
     chunk_size: int = 1000
@@ -30,9 +30,7 @@ class CodeSuggestion:
     confidence: float
 
 class AIAnalyzer:
-    """
-    Analisador baseado em IA que fornece sugestões inteligentes.
-    """
+    """Analisador baseado em IA que fornece sugestões inteligentes."""
     
     def __init__(self, config: AIAnalysisConfig):
         self.config = config
@@ -46,208 +44,41 @@ class AIAnalyzer:
         await self.config.provider.stop()
     
     async def analyze_code(self, file_path: str, content: str) -> List[CodeSuggestion]:
-        """
-        Analisa código usando IA e retorna sugestões.
-        
-        Args:
-            file_path: Caminho do arquivo
-            content: Conteúdo do arquivo
-            
-        Returns:
-            Lista de sugestões de melhoria
-        """
-        # Divide o código em chunks para análise
-        chunks = self._split_code(content)
-        suggestions = []
-        
-        for i, chunk in enumerate(chunks):
-            try:
-                chunk_suggestions = await self._analyze_chunk(file_path, chunk, i * self.config.chunk_size)
-                suggestions.extend(chunk_suggestions)
-            except Exception as e:
-                logger.error(
-                    "ai_analyzer.chunk_analysis_failed",
-                    file=file_path,
-                    chunk=i,
-                    error=str(e)
-                )
-        
-        return suggestions
-    
-    async def suggest_refactoring(self, code: str) -> str:
-        """
-        Sugere refatoração para um trecho de código.
-        
-        Args:
-            code: Código a ser refatorado
-            
-        Returns:
-            Sugestão de refatoração
-        """
-        prompt = self._create_refactoring_prompt(code)
-        response = await self.config.provider.complete(
-            prompt,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens
-        )
-        
-        return self._parse_refactoring_response(response)
-    
-    async def explain_code(self, code: str) -> str:
-        """
-        Gera uma explicação detalhada do código.
-        
-        Args:
-            code: Código a ser explicado
-            
-        Returns:
-            Explicação do código
-        """
-        prompt = self._create_explanation_prompt(code)
-        return await self.config.provider.complete(
-            prompt,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens
-        )
-    
-    async def suggest_tests(self, code: str) -> str:
-        """
-        Sugere testes unitários para o código.
-        
-        Args:
-            code: Código para gerar testes
-            
-        Returns:
-            Sugestão de testes unitários
-        """
-        prompt = self._create_test_prompt(code)
-        return await self.config.provider.complete(
-            prompt,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens
-        )
-    
-    async def _analyze_chunk(self, file_path: str, code: str, start_line: int) -> List[CodeSuggestion]:
-        """Analisa um trecho de código usando IA."""
-        prompt = self._create_analysis_prompt(code)
-        
+        """Analisa código usando IA e retorna sugestões."""
         try:
+            prompt = self._create_analysis_prompt(content)
             response = await self.config.provider.complete(
                 prompt,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens
             )
-            return self._parse_analysis_response(file_path, code, response, start_line)
+            return self._parse_analysis_response(file_path, content, response, 1)
         except Exception as e:
             logger.error(
-                "ai_analyzer.chunk_analysis_error",
+                "ai_analyzer.analysis_error",
                 file=file_path,
-                start_line=start_line,
                 error=str(e)
             )
             return []
     
-    def _split_code(self, content: str) -> List[str]:
-        """Divide o código em chunks para análise."""
-        lines = content.split('\n')
-        chunks = []
-        current_chunk = []
-        current_size = 0
-        
-        for line in lines:
-            line_size = len(line)
-            if current_size + line_size > self.config.chunk_size and current_chunk:
-                chunks.append('\n'.join(current_chunk))
-                current_chunk = []
-                current_size = 0
-            
-            current_chunk.append(line)
-            current_size += line_size
-        
-        if current_chunk:
-            chunks.append('\n'.join(current_chunk))
-        
-        return chunks
-    
     def _create_analysis_prompt(self, code: str) -> str:
         """Cria o prompt para análise de código."""
-        return f"""
-        Analise o seguinte código Python e sugira melhorias:
-        
-        ```python
-        {code}
-        ```
-        
-        Por favor, forneça sugestões específicas para:
-        1. Melhorias de design e arquitetura
-        2. Otimizações de performance
-        3. Melhorias de legibilidade
-        4. Possíveis bugs ou problemas de segurança
-        
-        Formate a resposta como JSON com os campos:
-        - suggestions: lista de sugestões, cada uma com:
-          - line: número da linha
-          - original_code: código original
-          - suggested_code: código sugerido
-          - explanation: explicação da melhoria
-          - confidence: nível de confiança (0.0 a 1.0)
-        """
-    
-    def _create_refactoring_prompt(self, code: str) -> str:
-        """Cria o prompt para sugestão de refatoração."""
-        return f"""
-        Sugira uma refatoração para o seguinte código Python:
-        
-        ```python
-        {code}
-        ```
-        
-        Por favor, forneça:
-        1. O código refatorado
-        2. Explicação das mudanças
-        3. Benefícios da refatoração
-        
-        Formate a resposta como JSON com os campos:
-        - refactored_code: código refatorado
-        - explanation: explicação das mudanças
-        - benefits: lista de benefícios
-        """
-    
-    def _create_explanation_prompt(self, code: str) -> str:
-        """Cria o prompt para explicação de código."""
-        return f"""
-        Explique o seguinte código Python em detalhes:
-        
-        ```python
-        {code}
-        ```
-        
-        Por favor, inclua:
-        1. Visão geral do funcionamento
-        2. Detalhes de implementação importantes
-        3. Padrões de design utilizados
-        4. Possíveis casos de uso
-        
-        Formate a resposta como texto estruturado com seções claras.
-        """
-    
-    def _create_test_prompt(self, code: str) -> str:
-        """Cria o prompt para sugestão de testes."""
-        return f"""
-        Sugira testes unitários para o seguinte código Python:
-        
-        ```python
-        {code}
-        ```
-        
-        Por favor, inclua:
-        1. Casos de teste importantes
-        2. Mocks necessários
-        3. Cenários de erro
-        4. Cobertura de código
-        
-        Formate a resposta como código Python com testes usando pytest.
-        """
+        return f"""Analise este código Python e sugira melhorias em português:
+
+{code}
+
+Forneça sugestões no seguinte formato:
+
+Linha X:
+Original: <código original>
+Sugestão: <código sugerido>
+Explicação: <explicação da melhoria>
+
+Exemplo:
+Linha 10:
+Original: def func():
+Sugestão: def process_data():
+Explicação: Nome da função mais descritivo para melhor legibilidade"""
     
     def _parse_analysis_response(
         self,
@@ -256,40 +87,80 @@ class AIAnalyzer:
         response: str,
         start_line: int
     ) -> List[CodeSuggestion]:
-        """Processa a resposta da API e retorna sugestões estruturadas."""
+        """Processa a resposta da análise."""
         try:
-            data = json.loads(response)
             suggestions = []
+            lines = response.split('\n')
+            current_suggestion = {}
             
-            for suggestion in data.get('suggestions', []):
-                suggestions.append(CodeSuggestion(
-                    file=file_path,
-                    line=start_line + suggestion.get('line', 1),
-                    original_code=suggestion.get('original_code', ''),
-                    suggested_code=suggestion.get('suggested_code', ''),
-                    explanation=suggestion.get('explanation', ''),
-                    confidence=suggestion.get('confidence', 0.0)
-                ))
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                if line.startswith('Linha ') or line.startswith('Line '):
+                    # Finaliza sugestão anterior se existir
+                    if current_suggestion:
+                        try:
+                            suggestions.append(CodeSuggestion(
+                                file=file_path,
+                                line=current_suggestion.get('line', 0),
+                                original_code=current_suggestion.get('original', ''),
+                                suggested_code=current_suggestion.get('suggested', ''),
+                                explanation=current_suggestion.get('explanation', ''),
+                                confidence=0.8
+                            ))
+                        except Exception as e:
+                            logger.error(
+                                "ai_analyzer.suggestion_creation_error",
+                                file=file_path,
+                                error=str(e),
+                                suggestion=current_suggestion
+                            )
+                        
+                        current_suggestion = {}
+                    
+                    # Extrai número da linha
+                    try:
+                        line_num = int(''.join(filter(str.isdigit, line.split(':')[0])))
+                        current_suggestion['line'] = line_num
+                    except:
+                        current_suggestion['line'] = 0
+                
+                elif line.lower().startswith('original:'):
+                    current_suggestion['original'] = line.split(':', 1)[1].strip()
+                
+                elif line.lower().startswith('sugestão:'):
+                    current_suggestion['suggested'] = line.split(':', 1)[1].strip()
+                
+                elif line.lower().startswith('explicação:'):
+                    current_suggestion['explanation'] = line.split(':', 1)[1].strip()
+            
+            # Adiciona última sugestão se existir
+            if current_suggestion:
+                try:
+                    suggestions.append(CodeSuggestion(
+                        file=file_path,
+                        line=current_suggestion.get('line', 0),
+                        original_code=current_suggestion.get('original', ''),
+                        suggested_code=current_suggestion.get('suggested', ''),
+                        explanation=current_suggestion.get('explanation', ''),
+                        confidence=0.8
+                    ))
+                except Exception as e:
+                    logger.error(
+                        "ai_analyzer.suggestion_creation_error",
+                        file=file_path,
+                        error=str(e),
+                        suggestion=current_suggestion
+                    )
             
             return suggestions
-        except json.JSONDecodeError as e:
+        except Exception as e:
             logger.error(
-                "ai_analyzer.response_parse_failed",
+                "ai_analyzer.parse_error",
                 file=file_path,
                 error=str(e),
-                response=response
+                error_type=type(e).__name__
             )
-            return []
-    
-    def _parse_refactoring_response(self, response: str) -> str:
-        """Processa a resposta de refatoração."""
-        try:
-            data = json.loads(response)
-            return data.get('refactored_code', '')
-        except json.JSONDecodeError as e:
-            logger.error(
-                "ai_analyzer.response_parse_failed",
-                error=str(e),
-                response=response
-            )
-            raise 
+            return [] 
