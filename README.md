@@ -1,183 +1,262 @@
 # Refactool
 
-![Refactool](https://img.shields.io/badge/Refactool-API-green)
+Uma ferramenta poderosa para análise e refatoração de código, com suporte a múltiplas linguagens e integração com IA.
 
-## 📋 Visão Geral do Projeto
+## 🚀 Funcionalidades
 
-O Refactool é uma ferramenta para análise e refatoração de código. Ele é composto por tais módulos principais:
+- 📊 Análise estática de código multi-linguagem
+- 🤖 Análise semântica com IA (DeepSeek e Ollama)
+- 🔄 Sistema de webhooks para notificações
+- 📝 Geração de relatórios detalhados
+- 🔍 Detecção de code smells e sugestões de melhoria
+- 🔗 Integração direta com GitHub
 
-- **API RESTful (porta 8000)**: Orquestra as chamadas aos microserviços.
-- **Microserviço Code-analyzer (porta 5000)**: Realiza análise detalhada do código.
-- **Microserviço AI-module (porta 6000)**: Sugere refatorações com base em padrões de código.
-- **CLI**: Ferramenta de linha de comando que facilita a análise e consulta de status.
+## 📋 Pré-requisitos
 
+- Python 3.8 ou superior
+- Git
+- Ollama (opcional, para análise local)
+- Chave API do DeepSeek (opcional, para análise em nuvem)
+- Token do GitHub (para integração com repositórios)
 
-----
+## 🛠️ Instalação
 
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/seu-usuario/refactool.git
+   cd refactool
+   ```
 
+2. Instale as dependências:
+   ```bash
+   pip install -r microservices/source-provider/src/requirements.txt
+   ```
 
-## 🚀 Começando
+3. Configure o ambiente:
+   ```bash
+   cp microservices/source-provider/src/.env.example microservices/source-provider/src/.env
+   ```
 
-### Pré-requisitos
+## ⚙️ Configuração
 
-Certifique-se de ter o Docker e Docker Compose instalados em sua máquina:
+### Arquivo .env
 
-- [Docker](https://www.docker.com/get-started)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+```env
+# Configurações do DeepSeek
+DEEPSEEK_API_KEY=sua-chave-api-aqui
+DEEPSEEK_MODEL=deepseek-coder-33b-instruct
+DEEPSEEK_TEMPERATURE=0.3
+DEEPSEEK_MAX_TOKENS=2000
+DEEPSEEK_CHUNK_SIZE=1000
 
-### Instalação
+# Configurações do Ollama
+OLLAMA_API_URL=http://localhost:11434/api/generate
+OLLAMA_MODEL=codellama
+OLLAMA_TEMPERATURE=0.3
+OLLAMA_MAX_TOKENS=2000
+OLLAMA_CHUNK_SIZE=1000
 
-Clone o repositório e inicie os containers:
+# Configurações de Webhook
+DISCORD_WEBHOOK_URL=sua-url-webhook-aqui
 
-```sh
-git clone https://github.com/gabrielsalvesdev/refactool
-cd refactool
-docker compose up -d
-
+# Configurações do GitHub
+GITHUB_TOKEN=seu-token-aqui
+GITHUB_API_URL=https://api.github.com
 ```
 
-----------
+### Configuração do GitHub
 
+1. Gere um token de acesso pessoal:
+   - Acesse GitHub > Settings > Developer settings > Personal access tokens
+   - Clique em "Generate new token"
+   - Selecione os escopos: `repo`, `workflow`
+   - Copie o token e adicione ao seu `.env`
 
-## 🛠️ Uso Básico via CLI
+2. Configure as credenciais do Git:
+   ```bash
+   git config --global user.name "Seu Nome"
+   git config --global user.email "seu@email.com"
+   ```
 
-#### Iniciar uma Análise
+### Configuração do Ollama (Opcional)
 
-Para iniciar uma análise, com os containers ativos, execute:
+1. Instale o Ollama:
+   ```bash
+   # Linux/MacOS
+   curl https://ollama.ai/install.sh | sh
+   
+   # Windows
+   # Baixe o instalador em https://ollama.ai/download
+   ```
 
-```
-refactool analyze --path "/caminho/do/projeto"
-```
+2. Execute o modelo CodeLlama:
+   ```bash
+   ollama run codellama
+   ```
 
-Isso enviará uma requisição para a API, que encaminha a análise para o microserviço de análise de código.
+## 📊 Uso
 
-### Consultar o Status de uma Tarefa
+### Análise de Repositório GitHub
 
-Para consultar o status de uma análise em andamento:
+1. Análise direta via URL:
+   ```python
+   from analyzers import RefactoolAnalyzer
+   from github_integration import GitHubManager
 
+   async def analisar_repositorio_github():
+       github = GitHubManager(os.getenv("GITHUB_TOKEN"))
+       analyzer = RefactoolAnalyzer()
+       
+       # Analisa diretamente do GitHub
+       await analyzer.analyze_github_repo(
+           "usuario/repositorio",
+           branch="main"
+       )
+   ```
 
-```
-refactool status --task_id <ID_DA_TAREFA>
-```
+2. Análise e criação de Pull Request:
+   ```python
+   async def analisar_e_criar_pr():
+       github = GitHubManager(os.getenv("GITHUB_TOKEN"))
+       analyzer = RefactoolAnalyzer()
+       
+       # Analisa e cria PR com sugestões
+       results = await analyzer.analyze_github_repo(
+           "usuario/repositorio",
+           create_pull_request=True,
+           pr_title="refactor: Melhorias sugeridas pela Refactool",
+           pr_body="Sugestões automáticas de refatoração"
+       )
+   ```
 
-Este comando retorna o status atual da tarefa, permitindo que você acompanhe o progresso da análise.
+3. Análise de Pull Request específico:
+   ```python
+   async def analisar_pull_request():
+       github = GitHubManager(os.getenv("GITHUB_TOKEN"))
+       analyzer = RefactoolAnalyzer()
+       
+       # Analisa um PR específico
+       await analyzer.analyze_github_pr(
+           "usuario/repositorio",
+           pr_number=123
+       )
+   ```
 
-----------
+### Análise de Repositório Local
 
-
-
-# 📦 Arquitetura do Projeto
-
-
-```
-|-- api
-|   |-- main.py
-|   |-- ...
-|
-|-- microservices
-|   |-- code-analyzer
-|   |   |-- app.py
-|   |   |-- ...
-|   |
-|   |-- ai-module
-|       |-- app.py
-|       |-- ...
-|
-|-- cli
-|   |-- refactool.py
-|   |-- ...
-|
-|-- docker-compose.yml
-|-- README.md
-
-```
-
-----------
-
-## 🌟 Funcionalidades Principais
-
--   **Análise de Código**: Identifique problemas no seu código e receba sugestões de melhoria.
--   **Refatoração Inteligente**: Aproveite a IA para sugestões automáticas de refatoração.
--   **CLI Amigável**: Execute análises e consulte status diretamente do terminal.
-
-----------
-
-## 🔍 Referência de API
-
-### Analisar Código
-
-**Endpoint:**  `POST /analyze`
-
-**Exemplo de Requisição:**
-
-```
-{
-  "path": "/caminho/do/projeto"
-}
-```
-
-**Exemplo de Resposta:**
-
-```
-{
-  "task_id": "12345"
-}
+```bash
+cd microservices/source-provider/src/analyzers/examples
+python analyze_project.py /caminho/do/seu/projeto
 ```
 
-#### Chamada via cURL
+### Análise via API
 
-Você pode chamar a API utilizando o seguinte comando via cURL:
+```python
+from analyzers import RefactoolAnalyzer
 
-```sh
-curl -v -H 'Authorization: dummy' -d '{"path":"/caminhodoprojeto"}' -H 'Content-Type: application/json' http://localhost:8000/analyze | cat
+async def analisar_projeto():
+    analyzer = RefactoolAnalyzer()
+    await analyzer.analyze_project("/caminho/do/projeto")
 ```
 
-Explicação:
-- O parâmetro `-v` ativa o modo verbose, exibindo detalhes da requisição e da resposta.
-- A opção `-H 'Authorization: dummy'` define o header de autorização (necessário para o endpoint, conforme implementado na API).
-- A opção `-d '{"path":"/caminhodoprojeto"}'` envia o corpo da requisição em formato JSON com a chave "path", onde você deve substituir "/caminhodoprojeto" pelo caminho do projeto real.
-- A opção `-H 'Content-Type: application/json'` garante que o servidor saiba que o payload está em JSON.
-- O comando `| cat` é usado para garantir que toda a saída seja enviada para o terminal.
+## 📄 Relatórios
 
-### Consultar Status
+Os relatórios são gerados em `reports/refactool_analysis.txt` e incluem:
 
-**Endpoint:**  `GET /status/{task_id}`
+- Visão geral do projeto
+- Linguagens utilizadas
+- Dependências encontradas
+- Code smells e sugestões
+- Recomendações da IA
 
-**Exemplo de Resposta:**
+## 🔔 Webhooks
 
+Configure webhooks para receber notificações sobre:
+
+- Conclusão da análise
+- Problemas críticos encontrados
+- Sugestões de melhoria
+- Atualizações de Pull Requests
+
+Exemplo de configuração:
+```python
+from webhook_manager import WebhookManager, WebhookConfig
+
+webhook_config = WebhookConfig(
+    url="sua-url-webhook",
+    event_types=["analysis.completed", "critical.issue", "pr.created"],
+    retry_count=3
+)
+
+manager = WebhookManager()
+manager.register_webhook(webhook_config)
 ```
-{
-  "task_id": "12345",
-  "status": "completed",
-  "details": {
-    "files_analyzed": 25,
-    "issues_found": 5
-  }
-}
+
+## 🎯 Exemplos de Uso
+
+### Análise Básica
+```python
+from analyzers import RefactoolAnalyzer
+
+async def analise_basica():
+    analyzer = RefactoolAnalyzer()
+    await analyzer.analyze_project("./meu-projeto")
 ```
 
-----------
+### Análise com Filtros
+```python
+from analyzers import RefactoolAnalyzer
 
-## 🌐 Contribuindo
+async def analise_com_filtros():
+    analyzer = RefactoolAnalyzer()
+    analyzer.code_analyzer.config.max_complexity = 15
+    analyzer.code_analyzer.config.max_method_lines = 50
+    await analyzer.analyze_project("./meu-projeto")
+```
 
-Contribuições são bem-vindas! Siga os passos abaixo para contribuir com o projeto:
+### Análise com Webhook e GitHub
+```python
+from analyzers import RefactoolAnalyzer
+from webhook_manager import WebhookManager, WebhookConfig
+from github_integration import GitHubManager
 
-1.  Fork o repositório
-2.  Crie uma branch (`git checkout -b feature/sua-feature`)
-3.  Commit suas mudanças (`git commit -am 'Adiciona nova feature'`)
-4.  Push para a branch (`git push origin feature/sua-feature`)
-5.  Abra um Pull Request
+async def analise_completa():
+    # Configura webhook
+    webhook = WebhookConfig(
+        url=os.getenv("DISCORD_WEBHOOK_URL"),
+        event_types=["analysis.completed", "pr.created"]
+    )
+    
+    # Inicializa gerenciadores
+    webhook_manager = WebhookManager()
+    webhook_manager.register_webhook(webhook)
+    
+    github = GitHubManager(os.getenv("GITHUB_TOKEN"))
+    
+    # Executa análise e cria PR
+    analyzer = RefactoolAnalyzer()
+    await analyzer.analyze_github_repo(
+        "usuario/repositorio",
+        create_pull_request=True
+    )
+```
 
-----------
+## 🤝 Contribuindo
 
-## 📄 Licença
+1. Fork o projeto
+2. Crie sua branch de feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add: nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
 
-Este projeto é licenciado sob a GNU Lesser General Public License v3.0.  [LICENSE]([https://github.com/gabrielsalvesdev/refactool/blob/main/LICENCE)  para mais detalhes.
+## 📝 Licença
 
-----------
+Este projeto está sob a GNU Lesser General Public License v3.0. Veja o arquivo [LICENCE](LICENCE) para mais detalhes.
 
-## 💬 Contato
+## 🔗 Links Úteis
 
-Para dúvidas ou sugestões, entre em contato:
-
--   **Email:**  [[contato@gabrielsousa.dev](mailto:contato@gabrielsousa.dev)]
+- [Documentação do DeepSeek](https://platform.deepseek.ai/)
+- [Documentação do Ollama](https://ollama.ai/docs)
+- [Documentação da API do GitHub](https://docs.github.com/en/rest)
+- [Guia de Contribuição](CONTRIBUTING.md)
+- [Código de Conduta](CODE_OF_CONDUCT.md)
