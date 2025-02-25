@@ -1,13 +1,12 @@
 from opentelemetry import trace, metrics
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.prometheus import PrometheusMetricExporter
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from fastapi import Response
 
-# Configurar o exportador de métricas para o Prometheus
-exporter = PrometheusMetricExporter()
-meter_provider = MeterProvider([PeriodicExportingMetricReader(exporter)])
+# Atualizei a configuração do exportador de métricas
+reader = PrometheusMetricReader()
+meter_provider = MeterProvider(metric_readers=[reader])
 metrics.set_meter_provider(meter_provider)
 
 

@@ -1,10 +1,10 @@
 from opentelemetry.metrics import get_meter_provider, set_meter_provider
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.prometheus import PrometheusMetricExporter
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
 
-# Configurar o provider e registrar um leitor periódico de métricas usando Prometheus
-provider = MeterProvider([PeriodicExportingMetricReader(PrometheusMetricExporter())])
+# Configurar o provider com PrometheusMetricReader
+reader = PrometheusMetricReader()
+provider = MeterProvider(metric_readers=[reader])
 set_meter_provider(provider)
 
 meter = get_meter_provider().get_meter("celery_tasks")
