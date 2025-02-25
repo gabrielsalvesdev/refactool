@@ -4,17 +4,17 @@ Analisador baseado em IA para sugestões inteligentes.
 
 import json
 from dataclasses import dataclass
-from typing import Dict, List, Optional
-import aiohttp
+from typing import Dict, List, Optional, Union
 import structlog
+
+from .ai_providers import AIProvider, DeepSeekProvider, OllamaProvider
 
 logger = structlog.get_logger()
 
 @dataclass
 class AIAnalysisConfig:
     """Configuração para análise com IA."""
-    api_key: str
-    model: str = "gpt-4"
+    provider: Union[DeepSeekProvider, OllamaProvider]
     temperature: float = 0.3
     max_tokens: int = 1000
     chunk_size: int = 1000
@@ -36,20 +36,14 @@ class AIAnalyzer:
     
     def __init__(self, config: AIAnalysisConfig):
         self.config = config
-        self._session: Optional[aiohttp.ClientSession] = None
     
     async def start(self):
         """Inicializa o analisador."""
-        if not self._session:
-            self._session = aiohttp.ClientSession()
-            logger.info("ai_analyzer.started")
+        await self.config.provider.start()
     
     async def stop(self):
         """Finaliza o analisador."""
-        if self._session:
-            await self._session.close()
-            self._session = None
-            logger.info("ai_analyzer.stopped")
+        await self.config.provider.stop()
     
     async def analyze_code(self, file_path: str, content: str) -> List[CodeSuggestion]:
         """
@@ -62,9 +56,6 @@ class AIAnalyzer:
         Returns:
             Lista de sugestões de melhoria
         """
-        if not self._session:
-            await self.start()
-        
         # Divide o código em chunks para análise
         chunks = self._split_code(content)
         suggestions = []
@@ -93,11 +84,12 @@ class AIAnalyzer:
         Returns:
             Sugestão de refatoração
         """
-        if not self._session:
-            await self.start()
-        
         prompt = self._create_refactoring_prompt(code)
-        response = await self._call_openai_api(prompt)
+        response = await self.config.provider.complete(
+            prompt,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens
+        )
         
         return self._parse_refactoring_response(response)
     
@@ -111,13 +103,12 @@ class AIAnalyzer:
         Returns:
             Explicação do código
         """
-        if not self._session:
-            await self.start()
-        
         prompt = self._create_explanation_prompt(code)
-        response = await self._call_openai_api(prompt)
-        
-        return response
+        return await self.config.provider.complete(
+            prompt,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens
+        )
     
     async def suggest_tests(self, code: str) -> str:
         """
@@ -129,20 +120,23 @@ class AIAnalyzer:
         Returns:
             Sugestão de testes unitários
         """
-        if not self._session:
-            await self.start()
-        
         prompt = self._create_test_prompt(code)
-        response = await self._call_openai_api(prompt)
-        
-        return response
+        return await self.config.provider.complete(
+            prompt,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens
+        )
     
     async def _analyze_chunk(self, file_path: str, code: str, start_line: int) -> List[CodeSuggestion]:
         """Analisa um trecho de código usando IA."""
         prompt = self._create_analysis_prompt(code)
         
         try:
-            response = await self._call_openai_api(prompt)
+            response = await self.config.provider.complete(
+                prompt,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens
+            )
             return self._parse_analysis_response(file_path, code, response, start_line)
         except Exception as e:
             logger.error(
@@ -152,44 +146,6 @@ class AIAnalyzer:
                 error=str(e)
             )
             return []
-    
-    async def _call_openai_api(self, prompt: str) -> str:
-        """Faz uma chamada à API do OpenAI."""
-        if not self._session:
-            raise RuntimeError("Session not initialized")
-        
-        try:
-            async with self._session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.config.api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": self.config.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Você é um especialista em análise e refatoração de código Python."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    "temperature": self.config.temperature,
-                    "max_tokens": self.config.max_tokens
-                }
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise RuntimeError(f"OpenAI API error: {error_text}")
-                
-                data = await response.json()
-                return data['choices'][0]['message']['content']
-        except Exception as e:
-            logger.error("ai_analyzer.api_call_failed", error=str(e))
-            raise
     
     def _split_code(self, content: str) -> List[str]:
         """Divide o código em chunks para análise."""

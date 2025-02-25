@@ -4,6 +4,7 @@ Pacote de analisadores de código.
 
 from .code_analyzer import CodeAnalyzer, AnalysisConfig, CodeSmell, CodeSmellType
 from .ai_analyzer import AIAnalyzer, AIAnalysisConfig, CodeSuggestion
+from .ai_providers import AIProvider, DeepSeekProvider, OllamaProvider
 
 __all__ = [
     'CodeAnalyzer',
@@ -12,5 +13,8 @@ __all__ = [
     'CodeSmellType',
     'AIAnalyzer',
     'AIAnalysisConfig',
-    'CodeSuggestion'
+    'CodeSuggestion',
+    'AIProvider',
+    'DeepSeekProvider',
+    'OllamaProvider'
 ] 

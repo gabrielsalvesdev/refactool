@@ -6,16 +6,27 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import aiohttp
 
 from ..ai_analyzer import AIAnalyzer, AIAnalysisConfig, CodeSuggestion
+from ..ai_providers import AIProvider
+
+class MockProvider(AIProvider):
+    """Provedor mock para testes."""
+    
+    def __init__(self):
+        super().__init__()
+        self.complete = AsyncMock()
 
 @pytest.fixture
-def config():
+def mock_provider():
+    """Fixture que fornece um provedor mock."""
+    return MockProvider()
+
+@pytest.fixture
+def config(mock_provider):
     """Fixture que fornece uma configuração de teste."""
     return AIAnalysisConfig(
-        api_key="test-key",
-        model="test-model",
+        provider=mock_provider,
         temperature=0.5,
         max_tokens=100,
         chunk_size=50
@@ -27,164 +38,100 @@ def analyzer(config):
     return AIAnalyzer(config)
 
 @pytest.mark.asyncio
-async def test_start_stop(analyzer):
+async def test_start_stop(analyzer, mock_provider):
     """Testa inicialização e finalização do analisador."""
-    assert analyzer._session is None
-    
     await analyzer.start()
-    assert isinstance(analyzer._session, aiohttp.ClientSession)
+    mock_provider.start.assert_called_once()
     
     await analyzer.stop()
-    assert analyzer._session is None
+    mock_provider.stop.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_analyze_code(analyzer):
+async def test_analyze_code(analyzer, mock_provider):
     """Testa análise de código."""
     code = """
     def test():
         print("hello")
     """
     
-    mock_response = {
-        "choices": [{
-            "message": {
-                "content": json.dumps({
-                    "suggestions": [{
-                        "line": 1,
-                        "original_code": 'print("hello")',
-                        "suggested_code": 'logger.info("hello")',
-                        "explanation": "Use logging instead of print",
-                        "confidence": 0.9
-                    }]
-                })
-            }
+    mock_provider.complete.return_value = json.dumps({
+        "suggestions": [{
+            "line": 1,
+            "original_code": 'print("hello")',
+            "suggested_code": 'logger.info("hello")',
+            "explanation": "Use logging instead of print",
+            "confidence": 0.9
         }]
-    }
+    })
     
-    mock_session = AsyncMock()
-    mock_session.post.return_value.__aenter__.return_value.status = 200
-    mock_session.post.return_value.__aenter__.return_value.json = AsyncMock(
-        return_value=mock_response
-    )
+    suggestions = await analyzer.analyze_code("test.py", code)
     
-    with patch("aiohttp.ClientSession", return_value=mock_session):
-        await analyzer.start()
-        suggestions = await analyzer.analyze_code("test.py", code)
-        
-        assert len(suggestions) == 1
-        assert isinstance(suggestions[0], CodeSuggestion)
-        assert suggestions[0].file == "test.py"
-        assert suggestions[0].line == 1
-        assert "print" in suggestions[0].original_code
-        assert "logger" in suggestions[0].suggested_code
-        assert suggestions[0].confidence == 0.9
+    assert len(suggestions) == 1
+    assert isinstance(suggestions[0], CodeSuggestion)
+    assert suggestions[0].file == "test.py"
+    assert suggestions[0].line == 1
+    assert "print" in suggestions[0].original_code
+    assert "logger" in suggestions[0].suggested_code
+    assert suggestions[0].confidence == 0.9
 
 @pytest.mark.asyncio
-async def test_suggest_refactoring(analyzer):
+async def test_suggest_refactoring(analyzer, mock_provider):
     """Testa sugestão de refatoração."""
     code = """
     def old_code():
         pass
     """
     
-    mock_response = {
-        "choices": [{
-            "message": {
-                "content": json.dumps({
-                    "refactored_code": "def new_code():\n    return None",
-                    "explanation": "Added return statement",
-                    "benefits": ["Explicit return", "Better type hints"]
-                })
-            }
-        }]
-    }
+    mock_provider.complete.return_value = json.dumps({
+        "refactored_code": "def new_code():\n    return None",
+        "explanation": "Added return statement",
+        "benefits": ["Explicit return", "Better type hints"]
+    })
     
-    mock_session = AsyncMock()
-    mock_session.post.return_value.__aenter__.return_value.status = 200
-    mock_session.post.return_value.__aenter__.return_value.json = AsyncMock(
-        return_value=mock_response
-    )
+    refactored = await analyzer.suggest_refactoring(code)
     
-    with patch("aiohttp.ClientSession", return_value=mock_session):
-        await analyzer.start()
-        refactored = await analyzer.suggest_refactoring(code)
-        
-        assert "new_code" in refactored
-        assert "return None" in refactored
+    assert "new_code" in refactored
+    assert "return None" in refactored
 
 @pytest.mark.asyncio
-async def test_explain_code(analyzer):
+async def test_explain_code(analyzer, mock_provider):
     """Testa explicação de código."""
     code = """
     def test():
         pass
     """
     
-    mock_response = {
-        "choices": [{
-            "message": {
-                "content": "This is a test function that does nothing."
-            }
-        }]
-    }
+    mock_provider.complete.return_value = "This is a test function that does nothing."
     
-    mock_session = AsyncMock()
-    mock_session.post.return_value.__aenter__.return_value.status = 200
-    mock_session.post.return_value.__aenter__.return_value.json = AsyncMock(
-        return_value=mock_response
-    )
+    explanation = await analyzer.explain_code(code)
     
-    with patch("aiohttp.ClientSession", return_value=mock_session):
-        await analyzer.start()
-        explanation = await analyzer.explain_code(code)
-        
-        assert "test function" in explanation
+    assert "test function" in explanation
 
 @pytest.mark.asyncio
-async def test_suggest_tests(analyzer):
+async def test_suggest_tests(analyzer, mock_provider):
     """Testa sugestão de testes."""
     code = """
     def add(a, b):
         return a + b
     """
     
-    mock_response = {
-        "choices": [{
-            "message": {
-                "content": """
-                def test_add():
-                    assert add(1, 2) == 3
-                """
-            }
-        }]
-    }
+    mock_provider.complete.return_value = """
+    def test_add():
+        assert add(1, 2) == 3
+    """
     
-    mock_session = AsyncMock()
-    mock_session.post.return_value.__aenter__.return_value.status = 200
-    mock_session.post.return_value.__aenter__.return_value.json = AsyncMock(
-        return_value=mock_response
-    )
+    tests = await analyzer.suggest_tests(code)
     
-    with patch("aiohttp.ClientSession", return_value=mock_session):
-        await analyzer.start()
-        tests = await analyzer.suggest_tests(code)
-        
-        assert "test_add" in tests
-        assert "assert" in tests
+    assert "test_add" in tests
+    assert "assert" in tests
 
 @pytest.mark.asyncio
-async def test_api_error(analyzer):
-    """Testa tratamento de erro da API."""
-    mock_session = AsyncMock()
-    mock_session.post.return_value.__aenter__.return_value.status = 400
-    mock_session.post.return_value.__aenter__.return_value.text = AsyncMock(
-        return_value="API Error"
-    )
+async def test_provider_error(analyzer, mock_provider):
+    """Testa tratamento de erro do provedor."""
+    mock_provider.complete.side_effect = RuntimeError("API Error")
     
-    with patch("aiohttp.ClientSession", return_value=mock_session):
-        await analyzer.start()
-        with pytest.raises(RuntimeError, match="OpenAI API error"):
-            await analyzer.explain_code("test")
+    suggestions = await analyzer.analyze_code("test.py", "test")
+    assert len(suggestions) == 0
 
 def test_split_code(analyzer):
     """Testa divisão do código em chunks."""
