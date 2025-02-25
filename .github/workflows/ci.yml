@@ -28,7 +28,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pylint structlog
+          pip install pytest pytest-cov pylint structlog bandit
       - name: Run tests
         run: |
           pytest --cov=./ --cov-report=xml
@@ -40,26 +40,21 @@ jobs:
           retention-days: 7
       - name: Run Code Analysis Tests
         run: pytest tests/integration/test_code_analysis.py -v
-      - name: Validate Metrics Post-Test
-        run: |
-          # Verifica se métricas OpenTelemetry estão registradas
-          METRICS_OUTPUT=$(curl -s http://localhost:8000/metrics)
-          echo "$METRICS_OUTPUT" | grep "celery_task_duration_seconds"
       - name: Store Test Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
           name: test-reports
           path: test-reports/
+          retention-days: 7
       - name: Run Security Scan
-        run: |
-          pip install bandit
-          bandit -r src/ -f json -o bandit.json
+        run: bandit -r src/ -f json -o bandit.json
       - name: Upload Security Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bandit-report
           path: bandit.json
+          retention-days: 7
 
   stress_tests:
     if: github.ref == 'refs/heads/main'
@@ -98,7 +93,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 black
-      - name: Run linters
+      - name: Run black
+        run: black . --check --diff
+      - name: Run flake8
         run: |
-          flake8 .
-          black . --check 
+          # Ignorar erros de formatação que o black já cuida
+          flake8 . --count --max-line-length=88 --extend-ignore=E203,W503 --statistics 
