@@ -1,21 +1,29 @@
-# Analisador de Repositórios
+# Refactool Analisador de Código
 
-Este é um analisador de código que pode analisar qualquer repositório GitHub, fornecendo métricas e sugestões de melhorias.
+Este projeto é uma ferramenta de análise de código que utiliza múltiplos provedores de IA para fornecer sugestões de melhoria em projetos. Por padrão, utiliza o Google Gemini, mas suporta integração com outros provedores.
 
 ## Funcionalidades
 
 - Análise estática de código
-- Detecção de problemas comuns (code smells)
-- Sugestões de melhorias usando IA
-- Suporte a múltiplas linguagens
-- Relatórios detalhados
+- Sugestões de melhoria em português do Brasil
+- Suporte a múltiplos provedores de IA:
+  - Google Gemini (padrão)
+  - OpenAI GPT
+  - DeepSeek
+  - Ollama (para execução local)
+- Análise de repositórios Git
+- Relatórios detalhados em formato JSON
+- Configuração flexível de provedores de IA
 
 ## Requisitos
 
 - Python 3.8+
 - Git instalado
-- Ollama (opcional, para análise com IA local)
-- Chave API OpenAI ou DeepSeek (opcional, para análise com IA em nuvem)
+- Pelo menos uma das seguintes chaves de API:
+  - Google Gemini API Key
+  - OpenAI API Key
+  - DeepSeek API Key
+  - Ollama instalado localmente (opcional)
 
 ## Instalação
 
@@ -30,209 +38,126 @@ cd refactool-beta
 pip install -r requirements.txt
 ```
 
-3. Configure as variáveis de ambiente (opcional):
-```bash
-# Para usar OpenAI
-export OPENAI_API_KEY=sua-chave-api
+3. Configure o arquivo `.env`:
+```env
+# Configuração do Gemini (Padrão)
+GEMINI_API_KEY=sua-chave-api-aqui
 
-# Para usar DeepSeek
-export DEEPSEEK_API_KEY=sua-chave-api
+# Configuração do Git (Windows)
+GIT_PYTHON_GIT_EXECUTABLE=C:\Program Files\Git\bin\git.exe
 
-# Para usar Git em Windows
-export GIT_PYTHON_GIT_EXECUTABLE="C:\Program Files\Git\bin\git.exe"
+# Configurações Opcionais de Outros Provedores
+OPENAI_API_KEY=sua-chave-openai-aqui
+DEEPSEEK_API_KEY=sua-chave-deepseek-aqui
+OLLAMA_URL=http://localhost:11434/api/generate
+OLLAMA_MODEL=llama2:13b
 ```
 
 ## Uso
 
 ### Análise Básica
-
-Para analisar um repositório:
+Para analisar um repositório usando o provedor padrão (Gemini):
 
 ```bash
 python analyze_repo.py https://github.com/usuario/repositorio
+```
+
+### Análise com Provedor Específico
+Para especificar qual provedor de IA usar:
+
+```bash
+# Usando OpenAI
+python analyze_repo.py https://github.com/usuario/repositorio --provider openai
+
+# Usando DeepSeek
+python analyze_repo.py https://github.com/usuario/repositorio --provider deepseek
+
+# Usando Ollama local
+python analyze_repo.py https://github.com/usuario/repositorio --provider ollama
 ```
 
 ### Opções Adicionais
 
-- Salvar relatório em arquivo:
 ```bash
-python analyze_repo.py https://github.com/usuario/repositorio -o relatorio.txt
-```
+# Salvar relatório em arquivo específico
+python analyze_repo.py https://github.com/usuario/repositorio -o relatorio.json
 
-- Usar arquivo de configuração personalizado:
-```bash
+# Usar arquivo de configuração personalizado
 python analyze_repo.py https://github.com/usuario/repositorio -c config.json
+
+# Análise com múltiplos provedores
+python analyze_repo.py https://github.com/usuario/repositorio --providers gemini,openai,deepseek
+
+# Análise focada em diretórios específicos
+python analyze_repo.py https://github.com/usuario/repositorio --dirs src/,tests/
 ```
 
 ### Configuração Personalizada
 
-Você pode criar um arquivo de configuração JSON com suas preferências:
+Você pode criar um arquivo `config.json` para personalizar a análise:
 
 ```json
 {
-    "timeout": 300,
-    "ollama_model": "llama2:13b",
-    "max_method_lines": 30,
-    "max_complexity": 10
-}
-```
-
-## Provedores de IA Suportados
-
-1. OpenAI (requer chave API)
-   - Modelos mais precisos
-   - Análise em nuvem
-   - Custo por uso
-
-2. DeepSeek (requer chave API)
-   - Especializado em código
-   - Análise em nuvem
-   - Custo por uso
-
-3. Ollama (local)
-   - Gratuito
-   - Execução local
-   - Requer mais recursos do computador
-
-O analisador tentará usar os provedores na seguinte ordem:
-1. OpenAI (se OPENAI_API_KEY estiver configurada)
-2. DeepSeek (se DEEPSEEK_API_KEY estiver configurada)
-3. Ollama (fallback local)
-
-## Exemplos de Uso
-
-1. Análise rápida:
-```bash
-python analyze_repo.py https://github.com/usuario/repositorio
-```
-
-2. Análise completa com relatório:
-```bash
-python analyze_repo.py https://github.com/usuario/repositorio -o relatorio.txt -c config.json
-```
-
-3. Análise com configuração específica:
-```bash
-python analyze_repo.py https://github.com/usuario/repositorio -c custom_config.json
-```
-
-## Guia Detalhado de Personalização
-
-### 1. Arquivo de Configuração
-
-Você pode criar um arquivo `config.json` com as seguintes configurações:
-
-```json
-{
-    "timeout": 300,
-    
-    // Configurações de IA
-    "ollama_model": "llama2:13b",
-    "ollama_timeout": 60,
-    "ollama_url": "http://localhost:11434/api/generate",
-    
-    "openai_model": "gpt-3.5-turbo-instruct",
-    "openai_timeout": 30,
-    
-    "deepseek_model": "deepseek-coder-33b-instruct",
-    "deepseek_timeout": 30,
-    
-    // Limites de Análise
-    "max_method_lines": 30,        // Máximo de linhas por método
-    "max_complexity": 10,          // Complexidade ciclomática máxima
-    "max_class_lines": 300,        // Máximo de linhas por classe
-    "max_parameters": 5,           // Máximo de parâmetros por função
-    "min_duplicate_lines": 6,      // Mínimo de linhas para detectar duplicação
-    "min_similarity": 0.8          // Similaridade mínima para código duplicado
-}
-```
-
-### 2. Arquivos Importantes
-
-O analisador presta atenção especial aos seguintes tipos de arquivos:
-
-```json
-{
-    "important_files": {
-        "build": [
-            "setup.py", "requirements.txt", "package.json",
-            "Cargo.toml", "build.gradle", "pom.xml"
-        ],
-        "config": [
-            ".env", "config.yaml", "config.json",
-            "docker-compose.yml", "Dockerfile"
-        ],
-        "docs": [
-            "README.md", "CONTRIBUTING.md", "API.md",
-            "CHANGELOG.md", "docs/"
-        ],
-        "tests": [
-            "test/", "tests/", "spec/", "__tests__/"
-        ],
-        "ci": [
-            ".github/workflows/", ".gitlab-ci.yml", "Jenkinsfile"
-        ]
+    "providers": {
+        "gemini": {
+            "enabled": true,
+            "model": "gemini-2.0-flash",
+            "temperature": 0.7
+        },
+        "openai": {
+            "enabled": true,
+            "model": "gpt-4",
+            "temperature": 0.5
+        },
+        "deepseek": {
+            "enabled": true,
+            "model": "deepseek-coder-33b-instruct"
+        },
+        "ollama": {
+            "enabled": true,
+            "model": "llama2:13b",
+            "url": "http://localhost:11434/api/generate"
+        }
+    },
+    "analysis": {
+        "max_method_lines": 30,
+        "max_complexity": 10,
+        "ignore_patterns": ["*.min.js", "vendor/*"]
     }
 }
 ```
 
-### 3. Linguagens Suportadas
+## Estrutura do Projeto
 
-O analisador suporta as seguintes extensões de arquivo:
+```
+/
+├── microservices/
+│   └── source-provider/
+│       └── src/
+│           ├── analyzers/         # Módulos de análise
+│           │   ├── ai_providers.py  # Provedores de IA
+│           │   └── ...
+│           ├── analyze_repo.py    # Script principal
+│           └── test_gemini.py     # Testes do Gemini
+├── requirements.txt   # Dependências
+└── README.md         # Este arquivo
+```
 
-- `.py`: Python
-- `.js`: JavaScript
-- `.ts`: TypeScript
-- `.java`: Java
-- `.go`: Go
-- `.rs`: Rust
-- `.cpp`: C++
-- `.cs`: C#
-- `.rb`: Ruby
-- `.php`: PHP
-- E mais...
+## Publicação
 
-### 4. Dicas de Personalização
-
-#### Para Projetos Grandes
-- Aumente o `timeout` para permitir análise completa
-- Reduza `min_duplicate_lines` para encontrar mais duplicações
-- Ajuste `max_class_lines` e `max_method_lines` conforme necessário
-
-#### Para Análise Rigorosa
-- Reduza `max_method_lines` (ex: 20 linhas)
-- Diminua `max_complexity` (ex: 5-7)
-- Reduza `max_parameters` (ex: 3-4)
-- Aumente `min_similarity` para duplicações (ex: 0.9)
-
-#### Para Análise Rápida
-- Use Ollama local em vez de OpenAI/DeepSeek
-- Aumente `min_duplicate_lines`
-- Reduza o escopo de arquivos importantes
-
-#### Para Análise Precisa
-- Use OpenAI com GPT-4 (requer chave API)
-- Aumente timeouts para permitir análise profunda
-- Ajuste `important_files` para seu tipo de projeto
-
-### 5. Variáveis de Ambiente
-
-Configure as seguintes variáveis conforme necessário:
+Este pacote está disponível no PyPI e pode ser instalado via pip:
 
 ```bash
-# Para usar OpenAI
-export OPENAI_API_KEY=sua-chave-api
-
-# Para usar DeepSeek
-export DEEPSEEK_API_KEY=sua-chave-api
-
-# Para Git no Windows
-export GIT_PYTHON_GIT_EXECUTABLE="C:\Program Files\Git\bin\git.exe"
+pip install refactool
 ```
+
+Novas versões são publicadas automaticamente através do pipeline de CI/CD quando uma nova tag é criada no repositório.
+
+> **Nota para desenvolvedores internos**: Instruções detalhadas sobre o processo de publicação estão disponíveis na documentação interna do projeto.
 
 ## Contribuindo
 
-1. Fork o projeto
+1. Faça um fork do projeto
 2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
 3. Commit suas mudanças (`git commit -am 'Adiciona nova feature'`)
 4. Push para a branch (`git push origin feature/nova-feature`)
