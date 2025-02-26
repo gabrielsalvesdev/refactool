@@ -54,7 +54,7 @@ OU
 
 1. Clone o repositório:
    ```bash
-   git clone [https://github.com/gabrielsalvesdev/refactool](https://github.com/gabrielsalvesdev/refactool)
+   git clone https://github.com/gabrielsalvesdev/refactool
    cd refactool-beta
    ```
 2. Instale as dependências:
