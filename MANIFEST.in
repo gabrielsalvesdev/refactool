@@ -1,0 +1,16 @@
+include LICENSE
+include README.md
+include requirements.txt
+include .env.example
+recursive-include microservices *.py
+recursive-include microservices *.json
+recursive-include microservices *.yml
+recursive-include microservices *.yaml
+recursive-include microservices *.md
+recursive-include microservices *.txt
+recursive-include microservices *.example
+recursive-exclude microservices *.pyc
+recursive-exclude microservices __pycache__
+recursive-exclude microservices *.env
+recursive-exclude microservices temp/*
+recursive-exclude microservices */temp/* 
