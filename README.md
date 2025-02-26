@@ -25,54 +25,58 @@ Este projeto é uma ferramenta de análise de código que utiliza múltiplos pro
   - DeepSeek API Key
   - Ollama instalado localmente (opcional)
 
+---
+
 ## Instalação
 
 Este pacote está disponível no PyPI e pode ser instalado via pip:
 
-1. ```bash
-pip install refactool
-```
+1.  
+   ```bash
+   pip install refactool
+   ```
 2. Configure o arquivo `.env`:
-```env
-# Configuração do Gemini (Padrão)
-GEMINI_API_KEY=sua-chave-api-aqui
+   ```env
+   # Configuração do Gemini (Padrão)
+   GEMINI_API_KEY=sua-chave-api-aqui
 
-# Configuração do Git (Windows)
-GIT_PYTHON_GIT_EXECUTABLE=C:\Program Files\Git\bin\git.exe
+   # Configuração do Git (Windows)
+   GIT_PYTHON_GIT_EXECUTABLE=C:\Program Files\Git\bin\git.exe
 
-# Configurações Opcionais de Outros Provedores
-OPENAI_API_KEY=sua-chave-openai-aqui
-DEEPSEEK_API_KEY=sua-chave-deepseek-aqui
-OLLAMA_URL=http://localhost:11434/api/generate
-OLLAMA_MODEL=llama2:13b```
+   # Configurações Opcionais de Outros Provedores
+   OPENAI_API_KEY=sua-chave-openai-aqui
+   DEEPSEEK_API_KEY=sua-chave-deepseek-aqui
+   OLLAMA_URL=http://localhost:11434/api/generate
+   OLLAMA_MODEL=llama2:13b
+   ```
 
 OU
 
 1. Clone o repositório:
-```bash
-git clone https://github.com/gabrielsalvesdev/refactool
-cd refactool-beta
-```
-
+   ```bash
+   git clone [https://github.com/gabrielsalvesdev/refactool](https://github.com/gabrielsalvesdev/refactool)
+   cd refactool-beta
+   ```
 2. Instale as dependências:
-```bash
-pip install -r requirements.txt
-```
-
+   ```bash
+   pip install -r requirements.txt
+   ```
 3. Configure o arquivo `.env`:
-```env
-# Configuração do Gemini (Padrão)
-GEMINI_API_KEY=sua-chave-api-aqui
+   ```env
+   # Configuração do Gemini (Padrão)
+   GEMINI_API_KEY=sua-chave-api-aqui
 
-# Configuração do Git (Windows)
-GIT_PYTHON_GIT_EXECUTABLE=C:\Program Files\Git\bin\git.exe
+   # Configuração do Git (Windows)
+   GIT_PYTHON_GIT_EXECUTABLE=C:\Program Files\Git\bin\git.exe
 
-# Configurações Opcionais de Outros Provedores
-OPENAI_API_KEY=sua-chave-openai-aqui
-DEEPSEEK_API_KEY=sua-chave-deepseek-aqui
-OLLAMA_URL=http://localhost:11434/api/generate
-OLLAMA_MODEL=llama2:13b
-```
+   # Configurações Opcionais de Outros Provedores
+   OPENAI_API_KEY=sua-chave-openai-aqui
+   DEEPSEEK_API_KEY=sua-chave-deepseek-aqui
+   OLLAMA_URL=http://localhost:11434/api/generate
+   OLLAMA_MODEL=llama2:13b
+   ```
+
+--- 
 
 ## Uso
 
