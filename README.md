@@ -27,9 +27,30 @@ Este projeto é uma ferramenta de análise de código que utiliza múltiplos pro
 
 ## Instalação
 
+Este pacote está disponível no PyPI e pode ser instalado via pip:
+
+1. ```bash
+pip install refactool
+```
+2. Configure o arquivo `.env`:
+```env
+# Configuração do Gemini (Padrão)
+GEMINI_API_KEY=sua-chave-api-aqui
+
+# Configuração do Git (Windows)
+GIT_PYTHON_GIT_EXECUTABLE=C:\Program Files\Git\bin\git.exe
+
+# Configurações Opcionais de Outros Provedores
+OPENAI_API_KEY=sua-chave-openai-aqui
+DEEPSEEK_API_KEY=sua-chave-deepseek-aqui
+OLLAMA_URL=http://localhost:11434/api/generate
+OLLAMA_MODEL=llama2:13b```
+
+OU
+
 1. Clone o repositório:
 ```bash
-git clone https://github.com/seu-usuario/refactool-beta.git
+git clone https://github.com/gabrielsalvesdev/refactool
 cd refactool-beta
 ```
 
@@ -144,12 +165,6 @@ Você pode criar um arquivo `config.json` para personalizar a análise:
 ```
 
 ## Publicação
-
-Este pacote está disponível no PyPI e pode ser instalado via pip:
-
-```bash
-pip install refactool
-```
 
 Novas versões são publicadas automaticamente através do pipeline de CI/CD quando uma nova tag é criada no repositório.
 
