@@ -180,7 +180,7 @@ class ExampleClass:
         self.a = 1
         self.b = 2
         self.c = 3
-    
+
     def long_method(self, a, b, c, d, e):
         result = 0
         if a > 0:
@@ -192,13 +192,8 @@ class ExampleClass:
             else:
                 result = a * (d + e)
         return result
-    
+
     def duplicate_code_1(self):
-        print("This is some duplicate code")
-        print("That will be detected")
-        print("By the analyzer")
-    
-    def duplicate_code_2(self):
         print("This is some duplicate code")
         print("That will be detected")
         print("By the analyzer")

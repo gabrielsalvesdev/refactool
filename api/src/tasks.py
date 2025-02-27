@@ -104,7 +104,7 @@ def invalidar_projeto(project_id):
 try:
     from redisbloom.client import Client
     rb = Client()
-except Exception as e:
+except Exception:
     rb = None
     logger.warning("RedisBloom não disponível")
 
