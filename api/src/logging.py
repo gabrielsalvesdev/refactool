@@ -9,7 +9,7 @@ structlog.configure(
         ),
         structlog.processors.add_log_level
     ],
-    context_class=structlog.threadlocal.wrap_dict(dict),
+    context_class=structlog.contextvars.wrap_dict(dict),
 )
 
 logger = structlog.get_logger() 

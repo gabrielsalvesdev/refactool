@@ -17,7 +17,11 @@ addopts = "-ra -q"
 testpaths = [
     "tests",
 ]
-python_paths = ["."]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "stress: marks tests as stress tests (deselect with '-m \"not stress\"')",
+]
 
 [tool.coverage.run]
 source = ["microservices"]
