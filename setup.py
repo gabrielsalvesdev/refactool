@@ -12,7 +12,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/seu-usuario/refactool-beta",
-    packages=find_packages(include=["microservices", "microservices.*", "src", "src.*"]),
+    packages=find_packages(),
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -21,8 +21,8 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        "fastapi",
-        "uvicorn",
+        "fastapi>=0.100.0",
+        "uvicorn>=0.22.0",
         "celery",
         "redis",
         "requests",
@@ -42,10 +42,19 @@ setup(
         "redisbloom",
         "aiohttp>=3.8.0",
         "pydantic>=2.0.0",
+        "pytest-asyncio>=0.21.0",
+        "pytest-cov>=4.1.0",
+        "pytest-sugar>=0.9.7",
+        "pytest-xdist>=3.3.0",
         "openai>=1.0.0",
         "PyGithub>=2.1.0",
         "gitpython>=3.1.0",
-        "python-dotenv>=0.19.0"
+        "python-dotenv>=1.0.0",
+        "anthropic>=0.5.0",
+        "google-ai-generativelanguage>=0.2.0",
+        "langchain>=0.0.300",
+        "langchain-openai>=0.0.1",
+        "langchain-anthropic>=0.0.1"
     ],
     entry_points={
         "console_scripts": [

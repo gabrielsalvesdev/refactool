@@ -26,13 +26,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e .
           pip install pytest pytest-cov pytest-asyncio
-          pip install -r requirements.txt
       
       - name: Run tests
         run: |
           mkdir -p test-reports/coverage
-          pytest --cov=microservices --cov-report=xml:test-reports/coverage/coverage.xml --cov-report=html:test-reports/coverage -v tests/
+          PYTHONPATH=$PYTHONPATH:$(pwd) pytest --cov=microservices --cov=api --cov-report=xml:test-reports/coverage/coverage.xml --cov-report=html:test-reports/coverage -v tests/
       
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -67,6 +67,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e .
           pip install black flake8
       
       - name: Format code
@@ -97,6 +98,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e .
           pip install bandit
       
       - name: Run security scan
