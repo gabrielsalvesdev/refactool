@@ -182,12 +182,8 @@ class RefactoolAnalyzer:
             return report
             
         except Exception as e:
-            logger.error(
-                "refactool_analyzer.analysis_failed",
-                error=str(e),
-                error_type=type(e).__name__
-            )
-            return "Erro ao analisar projeto"
+            logger.error(f"Erro na análise Refactool: {str(e)}")
+            return None
     
     def _generate_analysis_report(
         self,

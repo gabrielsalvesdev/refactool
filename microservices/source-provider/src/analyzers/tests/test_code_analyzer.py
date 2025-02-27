@@ -4,6 +4,9 @@ Testes para o analisador de código.
 
 import pytest
 from ..code_analyzer import CodeAnalyzer, AnalysisConfig, CodeSmellType
+import hashlib
+from django.test import Client
+from django.core.cache import cache as redis_cache
 
 def test_analyze_syntax_error():
     """Testa análise de código com erro de sintaxe."""
@@ -186,4 +189,25 @@ def test_normalize_code():
     assert "#" not in normalized
     assert "string" not in normalized
     assert "Comentário" not in normalized
-    assert "outro comentário" not in normalized 
+    assert "outro comentário" not in normalized
+
+def test_cache_hit():
+    path = "tests/sample_project"
+    # Primeira execução (miss)
+    task_1 = analyze_code_task.delay(path)
+    result_1 = task_1.get(timeout=60)
+    assert not result_1.get("cached", False), "Primeira execução deveria não ter cache"
+
+    # Segunda execução (hit)
+    task_2 = analyze_code_task.delay(path)
+    result_2 = task_2.get(timeout=60)
+    assert result_2.get("cached", False), "Segunda execução deveria usar cache"
+
+def test_cache_invalidation():
+    path = "tests/sample_project"
+    analyze_code_task.delay(path).get(timeout=60)
+    hash_val = hashlib.sha256(path.encode()).hexdigest()
+    cache_key = f"analysis:{hash_val}"
+    response = client.delete(f"/invalidate-cache/{cache_key}")
+    assert response.json()["status"] == "deleted"
+    assert redis_cache.get(cache_key) is None 

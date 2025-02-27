@@ -54,12 +54,8 @@ class AIAnalyzer:
             )
             return self._parse_analysis_response(file_path, content, response, 1)
         except Exception as e:
-            logger.error(
-                "ai_analyzer.analysis_error",
-                file=file_path,
-                error=str(e)
-            )
-            return []
+            logger.error(f"Erro na análise AI: {str(e)}")
+            return None
     
     def _create_analysis_prompt(self, code: str) -> str:
         """Cria o prompt para análise de código."""

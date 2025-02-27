@@ -69,9 +69,9 @@ def analyze_code_task(self, project_path: str):
         # Armazena o resultado no cache com TTL dinâmico
         redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
         return result_data
-    except Exception as e:
-        logger.exception("Falha crítica na análise")
-        return {"status": "FAILED", "error": str(e), "trace": traceback.format_exc()}
+    except Exception:
+        logger.error("Erro ao processar tarefa")
+        return {"status": "FAILED", "error": "Erro ao processar tarefa", "trace": traceback.format_exc()}
 
 # -------------------- Estratégias Avançadas de Cache e Otimização --------------------
 
@@ -162,9 +162,9 @@ def analyze_code_task_with_bloom(self, project_path: str):
         
         redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
         return result_data
-    except Exception as e:
-        logger.exception("Falha crítica na análise")
-        return {"status": "FAILED", "error": str(e), "trace": traceback.format_exc()}
+    except Exception:
+        logger.error("Erro ao processar tarefa")
+        return {"status": "FAILED", "error": "Erro ao processar tarefa", "trace": traceback.format_exc()}
 
 # Tarefa de pré-aquecimento dos caches (Cache Warmup) via Celery Beat
 celery.conf.beat_schedule = {
