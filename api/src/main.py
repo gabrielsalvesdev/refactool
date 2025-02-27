@@ -1,7 +1,7 @@
 # api/src/main.py
 from fastapi import FastAPI, HTTPException, Depends, Request
 from pydantic import BaseModel
-from security import validate_token
+from api.src.security import validate_token
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
