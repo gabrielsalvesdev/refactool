@@ -54,7 +54,8 @@ setup(
         "google-ai-generativelanguage>=0.2.0",
         "langchain>=0.0.300",
         "langchain-openai>=0.0.1",
-        "langchain-anthropic>=0.0.1"
+        "langchain-anthropic>=0.0.1",
+        "slowapi"
     ],
     entry_points={
         "console_scripts": [
