@@ -16,13 +16,15 @@ from api.src.analyzers.code_analyzer import CodeAnalyzer
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
-# Atualização: Usar DB 1 para cache
+# Atualização: Usar DB 1 para cache com retry e timeout
 redis_cache = Redis(
     host=REDIS_HOST,
     port=REDIS_PORT,
     db=1,
     decode_responses=False,  # Armazena como bytes
-    retry_on_timeout=True
+    retry_on_timeout=True,
+    socket_connect_timeout=1,
+    socket_timeout=1
 )
 
 # Importar métricas de cache
@@ -39,8 +41,8 @@ celery = Celery(
     backend=f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
 )
 
-@celery.task(name="analyze_code")
-def analyze_code_task(path: str) -> Dict:
+@celery.task(name="analyze_code", bind=True)
+def analyze_code_task(self, path: str) -> Dict:
     """
     Tarefa Celery para análise de código
     """
@@ -48,10 +50,14 @@ def analyze_code_task(path: str) -> Dict:
         # Verifica cache
         hash_val = hashlib.sha256(path.encode()).hexdigest()
         cache_key = f"analysis:{hash_val}"
-        cached = redis_cache.get(cache_key)
         
-        if cached:
-            return {"status": "SUCCESS", "result": json.loads(cached), "cached": True}
+        try:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                cache_hits.add(1)
+                return {"status": "SUCCESS", "result": json.loads(cached), "cached": True}
+        except Exception as e:
+            logger.warning("Erro ao acessar cache", error=str(e))
         
         # Executa análise
         analyzer = CodeAnalyzer()
@@ -63,18 +69,25 @@ def analyze_code_task(path: str) -> Dict:
             "result": result,
             "cached": False
         }
-        # TTL padrão de 1 hora
-        ttl = int(os.getenv("CACHE_TTL", 3600))
-        redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
+        
+        try:
+            # TTL padrão de 1 hora
+            ttl = int(os.getenv("CACHE_TTL", 3600))
+            redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
+            cache_misses.add(1)
+        except Exception as e:
+            logger.warning("Erro ao salvar no cache", error=str(e))
+            
         return result_data
         
     except Exception as error:
-        logger.error("Erro ao processar análise", error=str(error))
-        return {
+        error_data = {
             "status": "ERROR",
             "error": str(error),
             "traceback": traceback.format_exc()
         }
+        logger.error("Erro ao processar análise", **error_data)
+        return error_data
 
 # -------------------- Estratégias Avançadas de Cache e Otimização --------------------
 
