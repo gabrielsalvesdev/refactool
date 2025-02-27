@@ -4,7 +4,7 @@ Exemplos de uso dos analisadores de código.
 
 import asyncio
 import os
-from typing import List
+from typing import List, Dict
 
 from .code_analyzer import CodeAnalyzer, AnalysisConfig, CodeSmell
 from .ai_analyzer import AIAnalyzer, AIAnalysisConfig
@@ -222,6 +222,22 @@ class ExampleClass:
     finally:
         # Remove o arquivo temporário
         os.remove(test_file)
+
+def get_example_suggestions():
+    return [
+        {
+            "line": 10,
+            "original": "def process_data(data):",
+            "suggested": "def process_data(data: Dict) -> List:",
+            "explanation": "Adicionar type hints melhora a legibilidade"
+        },
+        {
+            "line": 25,
+            "original": "except Exception as e:",
+            "suggested": "except (ValueError, KeyError) as e:",
+            "explanation": "Especificar exceções torna o código mais seguro"
+        }
+    ]
 
 if __name__ == "__main__":
     asyncio.run(main()) 

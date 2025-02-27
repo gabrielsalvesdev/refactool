@@ -125,7 +125,7 @@ Explicação: Nome da função mais descritivo para melhor legibilidade"""
                     try:
                         line_num = int(''.join(filter(str.isdigit, line.split(':')[0])))
                         current_suggestion['line'] = line_num
-                    except:
+                    except (ValueError, IndexError):
                         current_suggestion['line'] = 0
                 
                 elif line.lower().startswith('original:'):

@@ -10,6 +10,7 @@ import json
 import os
 from redis import Redis
 from typing import Dict
+from api.src.analyzers.code_analyzer import CodeAnalyzer
 
 # Atualização: Usar DB 1 para cache
 redis_cache = Redis(
@@ -53,15 +54,17 @@ def analyze_code_task(path: str) -> Dict:
             "result": result,
             "cached": False
         }
+        # TTL padrão de 1 hora
+        ttl = int(os.getenv("CACHE_TTL", 3600))
         redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
         return result_data
         
-    except Exception as e:
-        logger.error("Erro ao processar análise", error=str(e))
+    except Exception as error:
+        logger.error("Erro ao processar análise", error=str(error))
         return {
             "status": "ERROR",
-            "error": str(e),
-            "trace": traceback.format_exc()
+            "error": str(error),
+            "traceback": traceback.format_exc()
         }
 
 # -------------------- Estratégias Avançadas de Cache e Otimização --------------------
