@@ -5,8 +5,11 @@ Testes para o analisador de código.
 import pytest
 from ..code_analyzer import CodeAnalyzer, AnalysisConfig, CodeSmellType
 import hashlib
-from django.test import Client
-from django.core.cache import cache as redis_cache
+from fastapi.testclient import TestClient
+from ....main import app
+from ....cache import redis_cache
+
+client = TestClient(app)
 
 def test_analyze_syntax_error():
     """Testa análise de código com erro de sintaxe."""
@@ -35,7 +38,6 @@ def test_analyze_long_method():
     """
     
     smells = analyzer.analyze_file("test.py", code)
-    
     assert any(s.type == CodeSmellType.LONG_METHOD for s in smells)
 
 def test_analyze_high_complexity():
@@ -52,7 +54,6 @@ def test_analyze_high_complexity():
     """
     
     smells = analyzer.analyze_file("test.py", code)
-    
     assert any(s.type == CodeSmellType.HIGH_COMPLEXITY for s in smells)
 
 def test_analyze_many_parameters():
@@ -64,7 +65,6 @@ def test_analyze_many_parameters():
     """
     
     smells = analyzer.analyze_file("test.py", code)
-    
     assert any(s.type == CodeSmellType.LONG_PARAMETER_LIST for s in smells)
 
 def test_analyze_large_class():
@@ -74,16 +74,13 @@ def test_analyze_large_class():
     class LargeClass:
         def method1(self):
             pass
-            
         def method2(self):
             pass
-            
         def method3(self):
             pass
     """
     
     smells = analyzer.analyze_file("test.py", code)
-    
     assert any(s.type == CodeSmellType.LARGE_CLASS for s in smells)
 
 def test_analyze_data_class():
@@ -93,19 +90,15 @@ def test_analyze_data_class():
     class DataClass:
         def get_x(self):
             return self._x
-            
         def set_x(self, value):
             self._x = value
-            
         def get_y(self):
             return self._y
-            
         def set_y(self, value):
             self._y = value
     """
     
     smells = analyzer.analyze_file("test.py", code)
-    
     assert any(s.type == CodeSmellType.DATA_CLASS for s in smells)
 
 def test_analyze_god_class():
@@ -133,7 +126,6 @@ def test_analyze_god_class():
     """
     
     smells = analyzer.analyze_file("test.py", code)
-    
     assert any(s.type == CodeSmellType.GOD_CLASS for s in smells)
 
 def test_analyze_duplicate_code():
@@ -143,14 +135,12 @@ def test_analyze_duplicate_code():
     def method1():
         print("Hello")
         print("World")
-        
     def method2():
         print("Hello")
         print("World")
     """
     
     smells = analyzer.analyze_file("test.py", code)
-    
     assert any(s.type == CodeSmellType.DUPLICATE_CODE for s in smells)
 
 def test_calculate_similarity():
@@ -176,7 +166,6 @@ def test_calculate_similarity():
 def test_normalize_code():
     """Testa normalização de código."""
     analyzer = CodeAnalyzer()
-    
     code = """
     # Comentário
     def test():
@@ -185,7 +174,6 @@ def test_normalize_code():
     """
     
     normalized = analyzer._normalize_code(code)
-    
     assert "#" not in normalized
     assert "string" not in normalized
     assert "Comentário" not in normalized

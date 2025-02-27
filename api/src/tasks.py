@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from redis import Redis
+from typing import Dict
 
 # Atualização: Usar DB 1 para cache
 redis_cache = Redis(
@@ -28,50 +29,40 @@ def get_project_size(path):
 
 celery = Celery(__name__, broker="redis://redis:6379/0", backend="redis://redis:6379/0")
 
-@celery.task(bind=True, name="analyze_code_task", autoretry_for=(subprocess.TimeoutExpired,), max_retries=3)
-def analyze_code_task(self, project_path: str):
+@celery.task(name="analyze_code")
+def analyze_code_task(path: str) -> Dict:
+    """
+    Tarefa Celery para análise de código
+    """
     try:
-        # Geração do hash único do projeto e definição da chave de cache
-        project_hash = hashlib.sha256(project_path.encode()).hexdigest()
-        cache_key = f"analysis:{project_hash}"
-
-        # Verifica se o resultado já está em cache
-        cached_result = redis_cache.get(cache_key)
-        if cached_result:
-            logger.info("Cache hit", project_path=project_path, cache_key=cache_key)
-            cache_hits.add(1)
-            result_data = json.loads(cached_result.decode('utf-8'))
-            result_data["cached"] = True
-            return result_data
-
-        if not Path(project_path).is_dir():
-            raise ValueError("Diretório inválido")
-        result = subprocess.run(
-            ["pylint", "--output-format=json", project_path],
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minutos
-        )
-        analysis_data = parse_pylint_output(result.stdout)
+        # Verifica cache
+        hash_val = hashlib.sha256(path.encode()).hexdigest()
+        cache_key = f"analysis:{hash_val}"
+        cached = redis_cache.get(cache_key)
+        
+        if cached:
+            return {"status": "SUCCESS", "result": json.loads(cached), "cached": True}
+        
+        # Executa análise
+        analyzer = CodeAnalyzer()
+        result = analyzer.analyze_project(path)
+        
+        # Salva no cache
         result_data = {
-            "status": "COMPLETED",
-            "metrics": analysis_data,
+            "status": "SUCCESS",
+            "result": result,
             "cached": False
         }
-
-        # Incrementa cache miss
-        cache_misses.add(1)
-
-        # Calcula TTL dinâmico com base no tamanho do projeto
-        project_size = get_project_size(project_path)
-        ttl = 3600 if project_size < 1_000_000 else 600
-
-        # Armazena o resultado no cache com TTL dinâmico
         redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
         return result_data
-    except Exception:
-        logger.error("Erro ao processar tarefa")
-        return {"status": "FAILED", "error": "Erro ao processar tarefa", "trace": traceback.format_exc()}
+        
+    except Exception as e:
+        logger.error("Erro ao processar análise", error=str(e))
+        return {
+            "status": "ERROR",
+            "error": str(e),
+            "trace": traceback.format_exc()
+        }
 
 # -------------------- Estratégias Avançadas de Cache e Otimização --------------------
 
