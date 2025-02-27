@@ -36,4 +36,4 @@ def setup_env():
     # Limpa as variáveis após os testes
     os.environ.pop("REDIS_HOST", None)
     os.environ.pop("REDIS_PORT", None)
-    os.environ.pop("CACHE_TTL", None) 
+    os.environ.pop("CACHE_TTL", None)

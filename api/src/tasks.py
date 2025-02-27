@@ -12,10 +12,14 @@ from redis import Redis
 from typing import Dict
 from api.src.analyzers.code_analyzer import CodeAnalyzer
 
+# Atualização: Usar variáveis de ambiente para configuração do Redis
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
 # Atualização: Usar DB 1 para cache
 redis_cache = Redis(
-    host=os.getenv("REDIS_HOST", "redis"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
+    host=REDIS_HOST,
+    port=REDIS_PORT,
     db=1,
     decode_responses=False,  # Armazena como bytes
     retry_on_timeout=True
@@ -28,7 +32,12 @@ from api.src.monitoring.celery_metrics import cache_hits, cache_misses
 def get_project_size(path):
     return sum(f.stat().st_size for f in Path(path).rglob('*.*'))
 
-celery = Celery(__name__, broker="redis://redis:6379/0", backend="redis://redis:6379/0")
+# Configuração do Celery usando variáveis de ambiente
+celery = Celery(
+    __name__,
+    broker=f"redis://{REDIS_HOST}:{REDIS_PORT}/0",
+    backend=f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+)
 
 @celery.task(name="analyze_code")
 def analyze_code_task(path: str) -> Dict:

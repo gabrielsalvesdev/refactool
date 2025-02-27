@@ -23,6 +23,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --name redis
+          --network-alias redis
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +42,9 @@ jobs:
           pip install pytest pytest-cov pytest-asyncio
       
       - name: Run tests
+        env:
+          REDIS_HOST: redis
+          REDIS_PORT: 6379
         run: |
           mkdir -p test-reports/coverage
           PYTHONPATH=$PYTHONPATH:$(pwd) pytest --cov=microservices --cov=api --cov-report=xml:test-reports/coverage/coverage.xml --cov-report=html:test-reports/coverage -v tests/
