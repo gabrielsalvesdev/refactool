@@ -6,20 +6,13 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+env:
+  DOCKER_IMAGE: refactool
+  DOCKER_TAG: ${{ github.sha }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      rabbitmq:
-        image: rabbitmq:3-management
-        ports:
-          - 5672:5672
-        options: --health-cmd "rabbitmqctl node_health_check" --health-interval 10s --health-timeout 5s --health-retries 5
-      redis:
-        image: redis:alpine
-        ports:
-          - 6379:6379
-        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,139 +22,175 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.8'
-        id: setup-python
-        continue-on-error: true
-        
-      - name: Retry Setup Python
-        uses: actions/setup-python@v5
-        if: steps.setup-python.outcome == 'failure'
-        with:
-          python-version: '3.8'
       
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Instalar requirements.txt se existir
+          pip install pytest pytest-cov pytest-asyncio
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
-          # Instalar dependências de teste
-          pip install pytest pytest-cov pylint structlog bandit
       
-      # Criar diretórios necessários
-      - name: Create directories
+      - name: Run tests
         run: |
           mkdir -p test-reports/coverage
-          mkdir -p src/logs
+          pytest --cov=microservices --cov-report=xml:coverage.xml --cov-report=html:test-reports/coverage -v tests/
       
-      # Primeiro rodar os testes unitários
-      - name: Run unit tests
-        run: |
-          # Criar arquivo de cobertura vazio para garantir que existe
-          echo '<?xml version="1.0" ?><coverage version="1.0"></coverage>' > coverage.xml
-          # Rodar testes se o diretório existir
-          if [ -d "tests/unit" ]; then
-            pytest --cov=./ --cov-report=xml --cov-report=html:test-reports/coverage -v tests/unit/ || true
-          else
-            echo "Diretório de testes unitários não encontrado"
-          fi
-      
-      - name: Upload coverage report
+      - name: Upload coverage
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
-          path: |
-            coverage.xml
-            test-reports/coverage/
-          retention-days: 7
-      
-      # Depois rodar testes de integração
-      - name: Run integration tests
-        run: |
-          # Criar arquivo de relatório vazio
-          echo '<?xml version="1.0" ?><testsuites></testsuites>' > test-reports/integration.xml
-          # Rodar testes se o diretório existir
-          if [ -d "tests/integration" ]; then
-            pytest -v tests/integration/ --junitxml=test-reports/integration.xml || true
-          else
-            echo "Diretório de testes de integração não encontrado"
-          fi
-      
-      - name: Store Test Reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-reports
-          path: test-reports/
-          retention-days: 7
-      
-      - name: Run Security Scan
-        run: |
-          # Criar diretório se não existir
-          mkdir -p test-reports
-          # Rodar bandit ignorando erros
-          bandit -r . -f json -o test-reports/bandit.json -ll -ii -s B101,B104,B105,B108 || true
-      
-      - name: Upload Security Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: security-report
-          path: test-reports/bandit.json
+          path: coverage.xml
           retention-days: 7
 
-  lint:
+      - name: Discord Notification
+        if: always()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "Test Results"
+          description: |
+            Branch: ${{ github.ref }}
+            Status: ${{ job.status }}
+            Coverage Report Available
+
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       
       - name: Set up Python
         uses: actions/setup-python@v5
-        with:
-          python-version: '3.8'
-        id: setup-python
-        continue-on-error: true
-        
-      - name: Retry Setup Python
-        uses: actions/setup-python@v5
-        if: steps.setup-python.outcome == 'failure'
         with:
           python-version: '3.8'
       
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 black
+          pip install black flake8
       
-      - name: Create reports directory
-        run: mkdir -p test-reports
+      - name: Check code style
+        run: black . --check --diff
       
-      - name: Run black
+      - name: Run linter
         run: |
-          # Criar arquivo de relatório vazio
-          echo "Black report" > test-reports/black.txt
-          black . --check --diff >> test-reports/black.txt || true
-      
-      - name: Run flake8
-        run: |
-          # Configuração mais permissiva para início do projeto
           flake8 . \
             --count \
             --max-line-length=120 \
-            --extend-ignore=E203,W503,E402,F401,E231,E126,E128,E124,E251,E201,E202,E226,F403,F405,E302,E305,W291,W293 \
-            --statistics \
-            --output-file=test-reports/flake8.txt || true
+            --extend-ignore=E203,W503,E402,F401 \
+            --statistics
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       
-      - name: Upload Lint Reports
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+      
+      - name: Run security scan
+        run: |
+          bandit -r . -f json -o security-report.json -ll -ii -s B101,B104,B105,B108
+      
+      - name: Upload security report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: lint-reports
-          path: test-reports/
+          name: security-report
+          path: security-report.json
           retention-days: 7
+
+  publish:
+    needs: [test, quality, security]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+      
+      - name: Build package
+        run: python -m build
+      
+      - name: Publish to Test PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+        run: |
+          twine upload --repository testpypi dist/*
+      
+      - name: Publish to PyPI
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          twine upload dist/*
+
+      - name: Discord Notification
+        if: always()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "Package Published"
+          description: |
+            Version: ${{ github.ref }}
+            Status: ${{ job.status }}
+            Published to: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') && 'PyPI' || 'Test PyPI' }}
+
+  docker:
+    needs: [test, quality, security]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+
+      - name: Discord Notification
+        if: always()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          title: "Docker Build"
+          description: |
+            Branch: ${{ github.ref }}
+            Status: ${{ job.status }}
+            Image: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
 
   # Remover jobs que não estão sendo usados ainda
   # stress_tests:
