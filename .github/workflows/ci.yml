@@ -330,7 +330,7 @@ jobs:
         if [ -d "api" ]; then
           celery -A api.src.tasks worker --loglevel=info --pool=solo & sleep 5 || true
         else
-          echo "Diretório api não encontrado"
+          echo "Diretório api não encontrado - Celery worker não iniciado"
           exit 0
         fi
         
@@ -408,7 +408,7 @@ jobs:
         if [ -d "api" ]; then
           celery -A api.src.tasks worker --loglevel=info --pool=solo & sleep 5 || true
         else
-          echo "Diretório api não encontrado"
+          echo "Diretório api não encontrado - Celery worker não iniciado"
           exit 0
         fi
         
