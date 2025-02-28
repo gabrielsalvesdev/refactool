@@ -19,13 +19,52 @@ permissions:
   id-token: write
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      checks: write
+    steps:
+    - uses: actions/checkout@v4
     
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black flake8
+        
+    - name: Check formatting
+      run: black . --check --diff
+      
+    - name: Lint with flake8
+      run: |
+        flake8 . --count --show-source --statistics --max-complexity=10
+
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt -r requirements-dev.txt
+        
+    - name: Type check
+      run: |
+        mypy api tests --ignore-missing-imports
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       redis:
         image: redis:latest
@@ -42,51 +81,51 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
     
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
-        cache-dependency-path: |
-          requirements.txt
-          requirements-dev.txt
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt -r requirements-dev.txt
         
-    - name: Start Celery worker
-      run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=solo &
-        sleep 5
-        
-    - name: Lint with flake8
-      run: |
-        flake8 . --count --show-source --statistics --max-complexity=10
-        
-    - name: Run tests
+    - name: Run unit tests
       env:
         PYTHONPATH: ${{ github.workspace }}
-        COVERAGE_FILE: .coverage
       run: |
-        pytest -v tests/ --cov=api --cov-report=xml --cov-report=html --junitxml=test-results.xml
+        pytest -v tests/ -m "unit" --cov=api --cov-report=xml --cov-report=html --junitxml=unit-test-results.xml
         
-    - name: Upload coverage report
+    - name: Upload test results
       uses: actions/upload-artifact@v4
       with:
-        name: coverage-report
+        name: unit-test-results
         path: |
           coverage.xml
           htmlcov
-          test-results.xml
+          unit-test-results.xml
         retention-days: 7
 
-  quality:
+  integration-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        env:
+          REDIS_MAXMEMORY: ${{ env.REDIS_MAXMEMORY }}
+          REDIS_MAXMEMORY_POLICY: ${{ env.REDIS_MAXMEMORY_POLICY }}
+
     steps:
     - uses: actions/checkout@v4
     
@@ -99,18 +138,132 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install black flake8 mypy types-all
+        pip install -r requirements.txt -r requirements-dev.txt
         
-    - name: Check formatting
-      run: black . --check --diff
-      
-    - name: Lint with flake8
+    - name: Start Celery worker
       run: |
-        flake8 . --count --show-source --statistics --max-complexity=10
+        celery -A api.src.tasks worker --loglevel=info --pool=solo &
+        sleep 5
         
-    - name: Type check
+    - name: Run integration tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: |
-        mypy api tests --ignore-missing-imports
+        pytest -v tests/ -m "integration" --cov=api --cov-report=xml --cov-report=html --junitxml=integration-test-results.xml
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: integration-test-results
+        path: |
+          coverage.xml
+          htmlcov
+          integration-test-results.xml
+        retention-days: 7
+
+  system-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        env:
+          REDIS_MAXMEMORY: ${{ env.REDIS_MAXMEMORY }}
+          REDIS_MAXMEMORY_POLICY: ${{ env.REDIS_MAXMEMORY_POLICY }}
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt -r requirements-dev.txt
+        
+    - name: Start Celery worker
+      run: |
+        celery -A api.src.tasks worker --loglevel=info --pool=solo &
+        sleep 5
+        
+    - name: Run system tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        pytest -v tests/ -m "system" --cov=api --cov-report=xml --cov-report=html --junitxml=system-test-results.xml
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: system-test-results
+        path: |
+          coverage.xml
+          htmlcov
+          system-test-results.xml
+        retention-days: 7
+
+  stress-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        env:
+          REDIS_MAXMEMORY: ${{ env.REDIS_MAXMEMORY }}
+          REDIS_MAXMEMORY_POLICY: ${{ env.REDIS_MAXMEMORY_POLICY }}
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt -r requirements-dev.txt
+        
+    - name: Start Celery worker
+      run: |
+        celery -A api.src.tasks worker --loglevel=info --pool=solo &
+        sleep 5
+        
+    - name: Run stress tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        pytest -v tests/ -m "stress" --cov=api --cov-report=xml --cov-report=html --junitxml=stress-test-results.xml
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: stress-test-results
+        path: |
+          coverage.xml
+          htmlcov
+          stress-test-results.xml
+        retention-days: 7
 
   security:
     runs-on: ubuntu-latest
@@ -130,7 +283,7 @@ jobs:
         
     - name: Run security scans
       run: |
-        bandit -r . -f json -o security-report.json -ll
+        bandit -r . -f json -o security-report.json -ll --exclude tests/,docs/
         safety check -r requirements.txt --json > dependencies-report.json
         pip-audit --requirement requirements.txt --format json > audit-report.json
         
@@ -145,7 +298,7 @@ jobs:
         retention-days: 7
 
   publish:
-    needs: [test, quality, security]
+    needs: [lint, type-check, unit-tests, integration-tests, system-tests, stress-tests, security]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
@@ -166,7 +319,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
+        pip install build
         
     - name: Build package
       run: python -m build
@@ -189,7 +342,7 @@ jobs:
         print-hash: true
 
   docker:
-    needs: [test, quality, security]
+    needs: [lint, type-check, unit-tests, integration-tests, system-tests, stress-tests, security]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     env:
