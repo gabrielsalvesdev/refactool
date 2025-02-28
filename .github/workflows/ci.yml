@@ -608,7 +608,8 @@ jobs:
     environment: DOCKER_PASS
     env:
       DOCKER_TAG: ${{ github.sha }}
-      DOCKERHUB_USERNAME: gabrielsousadev
+      DOCKER_IMAGE: refactool
+      DOCKER_REGISTRY: gabrielsousadev
     steps:
     - uses: actions/checkout@v4
       with:
@@ -648,8 +649,8 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:buildcache
-        cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+        cache-from: type=registry,ref=gabrielsousadev/${{ env.DOCKER_IMAGE }}:buildcache
+        cache-to: type=registry,ref=gabrielsousadev/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
         
     - name: Save build info
       shell: bash
@@ -673,6 +674,6 @@ jobs:
       with:
         username: gabrielsousadev
         password: ${{ secrets.DOCKER_PASS_KEY }}
-        repository: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}
+        repository: gabrielsousadev/${{ env.DOCKER_IMAGE }}
         short-description: Analisador de código com cache distribuído e alta performance
         readme-filepath: ./README.md
