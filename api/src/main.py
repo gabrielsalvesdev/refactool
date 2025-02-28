@@ -1,5 +1,6 @@
 # api/src/main.py
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from api.src.security import validate_token
 from slowapi import Limiter
@@ -22,23 +23,30 @@ class AnalyzeRequest(BaseModel):
 async def analyze_code(request: AnalyzeRequest, token: str = Depends(validate_token)):
     try:
         if not request.path:
-            raise HTTPException(status_code=400, detail="Path é obrigatório")
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Path é obrigatório", "status": "ERROR"}
+            )
         
         # Verifica se o caminho existe
         path = Path(request.path)
         if not path.exists():
-            raise HTTPException(status_code=400, detail="Caminho inválido ou não existe")
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"error": "Caminho inválido ou não existe", "status": "ERROR"}
+            )
             
         # Simulação de análise de código
         return {
             "status": "SUCCESS",
             "issues": []
         }
-    except HTTPException:
-        raise
     except Exception as e:
         # Log da exceção pode ser adicionado aqui
-        raise HTTPException(status_code=500, detail="Erro interno ao processar a análise: " + str(e))
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error": f"Erro interno ao processar a análise: {str(e)}", "status": "ERROR"}
+        )
 
 @app.get("/status/{task_id}")
 async def get_status(task_id: str):

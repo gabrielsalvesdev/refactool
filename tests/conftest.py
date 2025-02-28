@@ -2,6 +2,7 @@
 import pytest
 from redis import Redis, ConnectionError
 import os
+import time
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_env():
@@ -29,21 +30,21 @@ def redis_connection():
         db=1,  # Usar DB 1 para testes
         decode_responses=False,
         retry_on_timeout=True,
-        socket_connect_timeout=5,
-        socket_timeout=5
+        socket_connect_timeout=10,  # Aumentado para 10 segundos
+        socket_timeout=10  # Aumentado para 10 segundos
     )
     
     try:
         # Testa a conexão com retry
-        for _ in range(3):  # Tenta 3 vezes
+        for attempt in range(10):  # Aumentado para 10 tentativas
             try:
                 redis.ping()
                 break
             except ConnectionError:
-                import time
-                time.sleep(1)  # Espera 1 segundo entre tentativas
+                print(f"Tentativa {attempt + 1}: Redis não disponível, tentando novamente...")
+                time.sleep(2)  # Espera 2 segundos entre tentativas
         else:
-            pytest.skip("Redis não está disponível após 3 tentativas")
+            pytest.skip("Redis não está disponível após 10 tentativas")
     except Exception as e:
         pytest.skip(f"Redis não está disponível: {str(e)}")
     
