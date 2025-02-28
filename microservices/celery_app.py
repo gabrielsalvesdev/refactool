@@ -8,7 +8,8 @@ result_backend = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('RE
 
 app = Celery('microservices',
              broker=broker_url,
-             backend=result_backend)
+             backend=result_backend,
+             include=['api.src.tasks'])  # Importa as tasks
 
 # Configurações para melhorar a estabilidade
 app.conf.update(
@@ -25,7 +26,8 @@ app.conf.update(
     worker_concurrency=4,
     redis_socket_connect_timeout=30,
     redis_socket_timeout=30,
-    redis_retry_on_timeout=True
+    redis_retry_on_timeout=True,
+    imports=['api.src.tasks']  # Garante que as tasks sejam importadas
 )
 
 @worker_ready.connect
