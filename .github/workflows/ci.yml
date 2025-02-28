@@ -44,15 +44,30 @@ jobs:
         python -m pip install --upgrade pip
         pip install black flake8
         
+    - name: Check Python files
+      run: |
+        if [ ! -d "api" ] && [ ! -d "tests" ]; then
+          echo "No Python files found to format"
+          exit 0
+        fi
+        
     - name: Format with black
-      run: black .
+      run: |
+        if [ -d "api" ] || [ -d "tests" ]; then
+          black api tests
+        fi
       
     - name: Check formatting
-      run: black . --check --diff
+      run: |
+        if [ -d "api" ] || [ -d "tests" ]; then
+          black api tests --check --diff
+        fi
       
     - name: Lint with flake8
       run: |
-        flake8 . --count --show-source --statistics --max-complexity=10
+        if [ -d "api" ] || [ -d "tests" ]; then
+          flake8 api tests --count --show-source --statistics --max-complexity=10
+        fi
         
     - name: Commit formatting changes
       if: github.event_name == 'pull_request'
@@ -113,17 +128,26 @@ jobs:
           requirements*.txt
         
     - name: Install dependencies
+      shell: bash
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-asyncio pytest-cov pytest-timeout
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+        for req in requirements*.txt; do
+          if [ -f "$req" ]; then
+            pip install -r "$req"
+          fi
+        done
         
     - name: Run unit tests
       env:
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        pytest -v tests/ -m "unit" --cov=api --cov-report=xml --cov-report=html --junitxml=unit-test-results.xml
+        if [ -d "tests" ]; then
+          pytest -v tests/ -m "unit" --cov=api --cov-report=xml --cov-report=html --junitxml=unit-test-results.xml
+        else
+          echo "No tests directory found"
+          exit 1
+        fi
         
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -164,22 +188,38 @@ jobs:
           requirements*.txt
         
     - name: Install dependencies
+      shell: bash
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-asyncio pytest-cov pytest-timeout
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+        for req in requirements*.txt; do
+          if [ -f "$req" ]; then
+            pip install -r "$req"
+          fi
+        done
         
     - name: Start Celery worker
+      shell: bash
       run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=solo &
-        sleep 5
+        if [ -d "api" ]; then
+          celery -A api.src.tasks worker --loglevel=info --pool=solo &
+          sleep 5
+        else
+          echo "No api directory found"
+          exit 1
+        fi
         
     - name: Run integration tests
       env:
         PYTHONPATH: ${{ github.workspace }}
+      shell: bash
       run: |
-        pytest -v tests/ -m "integration" --cov=api --cov-report=xml --cov-report=html --junitxml=integration-test-results.xml
+        if [ -d "tests" ]; then
+          pytest -v tests/ -m "integration" --cov=api --cov-report=xml --cov-report=html --junitxml=integration-test-results.xml
+        else
+          echo "No tests directory found"
+          exit 1
+        fi
         
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -220,22 +260,38 @@ jobs:
           requirements*.txt
         
     - name: Install dependencies
+      shell: bash
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-asyncio pytest-cov pytest-timeout
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+        for req in requirements*.txt; do
+          if [ -f "$req" ]; then
+            pip install -r "$req"
+          fi
+        done
         
     - name: Start Celery worker
+      shell: bash
       run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=solo &
-        sleep 5
+        if [ -d "api" ]; then
+          celery -A api.src.tasks worker --loglevel=info --pool=solo &
+          sleep 5
+        else
+          echo "No api directory found"
+          exit 1
+        fi
         
     - name: Run system tests
       env:
         PYTHONPATH: ${{ github.workspace }}
+      shell: bash
       run: |
-        pytest -v tests/ -m "system" --cov=api --cov-report=xml --cov-report=html --junitxml=system-test-results.xml
+        if [ -d "tests" ]; then
+          pytest -v tests/ -m "system" --cov=api --cov-report=xml --cov-report=html --junitxml=system-test-results.xml
+        else
+          echo "No tests directory found"
+          exit 1
+        fi
         
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -276,22 +332,38 @@ jobs:
           requirements*.txt
         
     - name: Install dependencies
+      shell: bash
       run: |
         python -m pip install --upgrade pip
         pip install pytest pytest-asyncio pytest-cov pytest-timeout
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+        for req in requirements*.txt; do
+          if [ -f "$req" ]; then
+            pip install -r "$req"
+          fi
+        done
         
     - name: Start Celery worker
+      shell: bash
       run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=solo &
-        sleep 5
+        if [ -d "api" ]; then
+          celery -A api.src.tasks worker --loglevel=info --pool=solo &
+          sleep 5
+        else
+          echo "No api directory found"
+          exit 1
+        fi
         
     - name: Run stress tests
       env:
         PYTHONPATH: ${{ github.workspace }}
+      shell: bash
       run: |
-        pytest -v tests/ -m "stress" --cov=api --cov-report=xml --cov-report=html --junitxml=stress-test-results.xml
+        if [ -d "tests" ]; then
+          pytest -v tests/ -m "stress" --cov=api --cov-report=xml --cov-report=html --junitxml=stress-test-results.xml
+        else
+          echo "No tests directory found"
+          exit 1
+        fi
         
     - name: Upload test results
       uses: actions/upload-artifact@v4
