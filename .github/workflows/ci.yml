@@ -41,10 +41,22 @@ jobs:
           pip install -e .
           pip install pytest pytest-cov pytest-asyncio redis
       
+      - name: Install Redis CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools
+      
       - name: Wait for Redis
         run: |
           echo "Aguardando Redis ficar disponível..."
-          timeout 30 bash -c 'until redis-cli ping; do sleep 1; done'
+          for i in {1..30}; do
+            if redis-cli ping > /dev/null 2>&1; then
+              echo "Redis está disponível!"
+              break
+            fi
+            echo "Tentativa $i: Redis ainda não está disponível..."
+            sleep 1
+          done
       
       - name: Run tests
         env:
