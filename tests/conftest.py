@@ -1,6 +1,6 @@
 """Configurações globais para testes."""
 import pytest
-from redis import Redis
+from redis import Redis, ConnectionError
 import os
 
 @pytest.fixture(scope="session", autouse=True)
@@ -39,7 +39,7 @@ def redis_connection():
             try:
                 redis.ping()
                 break
-            except:
+            except ConnectionError:
                 import time
                 time.sleep(1)  # Espera 1 segundo entre tentativas
         else:

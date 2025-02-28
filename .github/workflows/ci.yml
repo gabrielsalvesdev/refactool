@@ -25,7 +25,6 @@ jobs:
           --health-retries 10
           --name redis
           --network-alias redis
-          --network host
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +48,7 @@ jobs:
       
       - name: Run tests
         env:
-          REDIS_HOST: localhost
+          REDIS_HOST: redis
           REDIS_PORT: 6379
         run: |
           mkdir -p test-reports/coverage

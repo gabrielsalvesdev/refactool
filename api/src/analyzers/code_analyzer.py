@@ -338,8 +338,8 @@ class CodeAnalyzer:
                     lines = content.splitlines()
                     total_analysis.total_lines += len(lines)
                     total_analysis.metrics.total_lines += len(lines)
-                    total_analysis.metrics.blank_lines += len([l for l in lines if not l.strip()])
-                    total_analysis.metrics.code_lines += len([l for l in lines if l.strip() and not l.strip().startswith("#")])
+                    total_analysis.metrics.blank_lines += len([line for line in lines if not line.strip()])
+                    total_analysis.metrics.code_lines += len([line for line in lines if line.strip() and not line.strip().startswith("#")])
                     
                     # Analisa funções e classes
                     tree = ast.parse(content)
