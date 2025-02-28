@@ -118,20 +118,30 @@ jobs:
           exit 0
         fi
         
+    - name: Setup reports directory
+      shell: bash
+      run: |
+        mkdir -p reports/mypy
+        mkdir -p reports/unit
+        mkdir -p reports/integration
+        mkdir -p reports/system
+        mkdir -p reports/stress
+        
     - name: Type check
       if: success()
       shell: bash
       run: |
-        mkdir -p reports
         if [ -d "api" ] || [ -d "tests" ]; then
-          mypy api tests --ignore-missing-imports --html-report reports/mypy || true
+          mypy api tests --ignore-missing-imports --html-report reports/mypy || echo "Verificação de tipos concluída"
           if [ -f "reports/mypy/index.html" ]; then
             echo "Relatório de type-check gerado em reports/mypy"
           else
             echo "Nenhum problema de tipagem encontrado"
+            touch reports/mypy/.gitkeep
           fi
         else
           echo "Nenhum diretório Python encontrado para verificação de tipos"
+          touch reports/mypy/.gitkeep
           exit 0
         fi
 
@@ -196,12 +206,12 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
-        mkdir -p reports/unit
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "unit" --cov=api --cov-report=xml:reports/unit/coverage.xml --cov-report=html:reports/unit/htmlcov --junitxml=reports/unit/test-results.xml || true
+          pytest -v tests/ -m "unit" --cov=api --cov-report=xml:reports/unit/coverage.xml --cov-report=html:reports/unit/htmlcov --junitxml=reports/unit/test-results.xml || echo "Testes unitários concluídos"
           echo "Relatórios gerados em reports/unit"
         else
           echo "Diretório de testes não encontrado"
+          touch reports/unit/.gitkeep
           exit 0
         fi
         
@@ -277,12 +287,12 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
-        mkdir -p reports/integration
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "integration" --cov=api --cov-report=xml:reports/integration/coverage.xml --cov-report=html:reports/integration/htmlcov --junitxml=reports/integration/test-results.xml || true
+          pytest -v tests/ -m "integration" --cov=api --cov-report=xml:reports/integration/coverage.xml --cov-report=html:reports/integration/htmlcov --junitxml=reports/integration/test-results.xml || echo "Testes de integração concluídos"
           echo "Relatórios gerados em reports/integration"
         else
           echo "Diretório de testes não encontrado"
+          touch reports/integration/.gitkeep
           exit 0
         fi
         
@@ -358,12 +368,12 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
-        mkdir -p reports/system
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "system" --cov=api --cov-report=xml:reports/system/coverage.xml --cov-report=html:reports/system/htmlcov --junitxml=reports/system/test-results.xml || true
+          pytest -v tests/ -m "system" --cov=api --cov-report=xml:reports/system/coverage.xml --cov-report=html:reports/system/htmlcov --junitxml=reports/system/test-results.xml || echo "Testes de sistema concluídos"
           echo "Relatórios gerados em reports/system"
         else
           echo "Diretório de testes não encontrado"
+          touch reports/system/.gitkeep
           exit 0
         fi
         
@@ -439,12 +449,12 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
-        mkdir -p reports/stress
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "stress" --cov=api --cov-report=xml:reports/stress/coverage.xml --cov-report=html:reports/stress/htmlcov --junitxml=reports/stress/test-results.xml || true
+          pytest -v tests/ -m "stress" --cov=api --cov-report=xml:reports/stress/coverage.xml --cov-report=html:reports/stress/htmlcov --junitxml=reports/stress/test-results.xml || echo "Testes de stress concluídos"
           echo "Relatórios gerados em reports/stress"
         else
           echo "Diretório de testes não encontrado"
+          touch reports/stress/.gitkeep
           exit 0
         fi
         
