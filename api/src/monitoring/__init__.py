@@ -1,3 +1,6 @@
+"""
+Monitoring module for Refactool
+"""
 from opentelemetry import trace, metrics
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider

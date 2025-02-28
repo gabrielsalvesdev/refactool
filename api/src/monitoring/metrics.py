@@ -2,7 +2,6 @@ from prometheus_client import Counter, Histogram, Gauge
 import time
 from functools import wraps
 from typing import Optional, Callable
-import psutil
 import os
 
 try:

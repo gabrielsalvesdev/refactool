@@ -11,6 +11,7 @@ env:
   DOCKER_TAG: ${{ github.sha }}
   REDIS_HOST: localhost
   REDIS_PORT: 6379
+  PYTHONPATH: ${{ github.workspace }}
 
 jobs:
   test:
@@ -37,8 +38,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -e .
           pip install -r requirements.txt
-          pip list | grep psutil  # Verificação explícita
+          pip list | grep psutil
       
       - name: Install Redis CLI
         run: |
@@ -68,6 +70,8 @@ jobs:
           celery -A api.src.tasks.celery worker --loglevel=INFO --pool=solo &
       
       - name: Run tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           mkdir -p test-reports/coverage
           pytest --cov=api --cov-report=html:test-reports/coverage --cov-report=xml:test-reports/coverage/coverage.xml
