@@ -80,7 +80,8 @@ def should_partition_task(path: str) -> bool:
     try:
         size = get_project_size(path)
         return size > 5_000_000  # 5MB
-    except:
+    except (OSError, IOError) as e:
+        logger.warning(f"Erro ao calcular tamanho do projeto: {str(e)}")
         return False
 
 @celery.task(name="analyze_directory")

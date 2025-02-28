@@ -54,5 +54,5 @@ def get_slot_distribution():
     finally:
         try:
             redis.close()
-        except:
-            pass 
+        except RedisError as e:
+            logging.warning(f"Erro ao fechar conexão Redis: {str(e)}") 
