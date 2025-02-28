@@ -3,20 +3,23 @@ FROM python:3.9-slim as builder
 
 WORKDIR /build
 
-# Instalar dependências de build
+# Instalar dependências de build e atualizar pip
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc python3-dev && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    python -m pip install --upgrade pip==25.0.1
 
 # Copiar e instalar requirements
 COPY requirements.txt .
-RUN pip install --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /wheels -r requirements.txt
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels -r requirements.txt
 
 # Final stage
 FROM python:3.9-slim
 
 WORKDIR /app
+
+# Atualizar pip antes de instalar os wheels
+RUN python -m pip install --upgrade pip==25.0.1
 
 # Copiar wheels e instalar
 COPY --from=builder /wheels /wheels
