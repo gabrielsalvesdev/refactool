@@ -11,9 +11,13 @@ import os
 from redis import Redis
 from typing import Dict
 from api.src.analyzers.code_analyzer import CodeAnalyzer
+from api.src.cache.lru_cache import LRUCache
+
+# Configuração do cache LRU global
+lru_cache = LRUCache(max_memory_mb=100, version=2)
 
 # Atualização: Usar variáveis de ambiente para configuração do Redis
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")  # Alterado default para localhost
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
 # Atualização: Usar DB 1 para cache com retry e timeout
@@ -23,8 +27,8 @@ redis_cache = Redis(
     db=1,
     decode_responses=False,  # Armazena como bytes
     retry_on_timeout=True,
-    socket_connect_timeout=10,  # Aumentado para 10 segundos
-    socket_timeout=10  # Aumentado para 10 segundos
+    socket_connect_timeout=10,
+    socket_timeout=10
 )
 
 # Importar métricas de cache
@@ -54,33 +58,47 @@ def analyze_code_task(self, path: str) -> Dict:
                 "error": "Caminho inválido ou não existe"
             }
 
-        # Verifica cache
+        # Verifica cache LRU primeiro
         hash_val = hashlib.sha256(path.encode()).hexdigest()
-        cache_key = f"analysis:{hash_val}"
+        cached_result = lru_cache.get(hash_val)
+        if cached_result:
+            cache_hits.add(1)
+            return json.loads(cached_result)
         
+        # Verifica cache Redis
+        cache_key = f"analysis_v2:{hash_val}"
         try:
             cached = redis_cache.get(cache_key)
             if cached:
+                # Atualiza o cache LRU
+                lru_cache.put(hash_val, cached)
                 cache_hits.add(1)
-                return {"status": "SUCCESS", "result": json.loads(cached), "cached": True}
+                return json.loads(cached)
         except Exception as e:
-            logger.warning("Erro ao acessar cache", error=str(e))
+            logger.warning("Erro ao acessar cache Redis", error=str(e))
         
         # Executa análise
         analyzer = CodeAnalyzer()
         result = analyzer.analyze_project(path)
         
-        # Salva no cache
+        # Prepara resultado
         result_data = {
             "status": "SUCCESS",
             "result": result,
             "cached": False
         }
         
+        # Serializa resultado
+        result_json = json.dumps(result_data)
+        
         try:
-            # TTL padrão de 1 hora
+            # Salva no cache Redis
             ttl = int(os.getenv("CACHE_TTL", 3600))
-            redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
+            redis_cache.setex(cache_key, ttl, result_json.encode('utf-8'))
+            
+            # Salva no cache LRU
+            lru_cache.put(hash_val, result_json)
+            
             cache_misses.add(1)
         except Exception as e:
             logger.warning("Erro ao salvar no cache", error=str(e))
@@ -154,10 +172,19 @@ def analyze_code_task_with_bloom(self, project_path: str):
             except Exception as ex:
                 logger.warning("Falha no uso do RedisBloom", exc_info=ex)
         
-        # Verifica cache
+        # Verifica cache LRU primeiro
+        cached_result = lru_cache.get(project_hash)
+        if cached_result:
+            logger.info("Cache LRU hit", project_path=project_path)
+            cache_hits.add(1)
+            return json.loads(cached_result)
+        
+        # Verifica cache Redis
         cached_result = redis_cache.get(cache_key)
         if cached_result:
-            logger.info("Cache hit", project_path=project_path, cache_key=cache_key)
+            logger.info("Cache Redis hit", project_path=project_path, cache_key=cache_key)
+            # Atualiza o cache LRU
+            lru_cache.put(project_hash, cached_result)
             cache_hits.add(1)
             result_data = json.loads(cached_result.decode('utf-8'))
             result_data["cached"] = True
@@ -180,10 +207,19 @@ def analyze_code_task_with_bloom(self, project_path: str):
         
         cache_misses.add(1)
         
+        # Serializa resultado
+        result_json = json.dumps(result_data)
+        
+        # Calcula TTL baseado no tamanho do projeto
         project_size = get_project_size(project_path)
         ttl = 3600 if project_size < 1_000_000 else 600
         
-        redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
+        # Salva no Redis
+        redis_cache.setex(cache_key, ttl, result_json.encode('utf-8'))
+        
+        # Salva no LRU
+        lru_cache.put(project_hash, result_json)
+        
         return result_data
     except Exception:
         logger.error("Erro ao processar tarefa")
