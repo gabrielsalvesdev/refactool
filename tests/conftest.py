@@ -3,6 +3,28 @@ import pytest
 from redis import Redis, ConnectionError
 import os
 import time
+import redis
+from typing import Generator
+from prometheus_client import CollectorRegistry
+
+def pytest_configure(config):
+    """Configuração global dos testes"""
+    config.addinivalue_line(
+        "markers",
+        "unit: testes unitários rápidos (timeout: 3s)"
+    )
+    config.addinivalue_line(
+        "markers",
+        "integration: testes de integração (timeout: 30s)"
+    )
+    config.addinivalue_line(
+        "markers",
+        "system: testes de sistema completo (timeout: 120s)"
+    )
+    config.addinivalue_line(
+        "markers",
+        "stress: testes de carga e performance (ambiente dedicado)"
+    )
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_env():
@@ -19,40 +41,63 @@ def setup_env():
     os.environ.pop("API_KEY", None)
 
 @pytest.fixture(scope="session")
-def redis_connection():
-    """Fixture para conexão com Redis."""
-    redis_host = os.getenv("REDIS_HOST", "localhost")
-    redis_port = int(os.getenv("REDIS_PORT", 6379))
-    
-    redis = Redis(
-        host=redis_host,
-        port=redis_port,
-        db=1,  # Usar DB 1 para testes
-        decode_responses=False,
-        retry_on_timeout=True,
-        socket_connect_timeout=10,  # Aumentado para 10 segundos
-        socket_timeout=10  # Aumentado para 10 segundos
-    )
+def redis_connection() -> Generator[redis.Redis, None, None]:
+    """Conexão Redis com configuração baseada no tipo de teste"""
+    if pytest.current_test.get_closest_marker("stress"):
+        # Configuração para testes de stress
+        client = redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", 6379)),
+            db=1,
+            socket_timeout=5.0,
+            socket_connect_timeout=5.0,
+            retry_on_timeout=True,
+            max_connections=50
+        )
+    else:
+        # Configuração padrão para outros testes
+        client = redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", 6379)),
+            db=1,
+            socket_timeout=2.0,
+            decode_responses=True
+        )
     
     try:
-        # Testa a conexão com retry
-        for attempt in range(10):  # Aumentado para 10 tentativas
-            try:
-                redis.ping()
-                break
-            except ConnectionError:
-                print(f"Tentativa {attempt + 1}: Redis não disponível, tentando novamente...")
-                time.sleep(2)  # Espera 2 segundos entre tentativas
-        else:
-            pytest.skip("Redis não está disponível após 10 tentativas")
-    except Exception as e:
-        pytest.skip(f"Redis não está disponível: {str(e)}")
-    
-    # Limpa o banco antes dos testes
-    redis.flushdb()
-    
-    yield redis
-    
-    # Limpa o banco após os testes
-    redis.flushdb()
-    redis.close()
+        yield client
+    finally:
+        client.close()
+
+@pytest.fixture(autouse=True)
+def setup_test_env(request):
+    """Configura ambiente baseado no tipo de teste"""
+    marker = request.node.get_closest_marker("stress")
+    if marker:
+        # Configuração para testes de stress
+        os.environ["CELERY_WORKER_POOL"] = "prefork"
+        os.environ["CELERY_MAX_TASKS_PER_CHILD"] = "100"
+        os.environ["CELERY_WORKER_CONCURRENCY"] = "4"
+    else:
+        # Configuração padrão
+        os.environ["CELERY_WORKER_POOL"] = "solo"
+        os.environ["CELERY_MAX_TASKS_PER_CHILD"] = "10"
+        os.environ["CELERY_WORKER_CONCURRENCY"] = "1"
+
+@pytest.fixture
+def metrics_registry():
+    """Registry isolado para métricas de teste"""
+    return CollectorRegistry()
+
+@pytest.fixture(autouse=True)
+def timeout_setup(request):
+    """Configura timeouts dinâmicos baseados no tipo de teste"""
+    marker = request.node.get_closest_marker("unit")
+    if marker:
+        request.node.add_marker(pytest.mark.timeout(3))
+    elif request.node.get_closest_marker("integration"):
+        request.node.add_marker(pytest.mark.timeout(30))
+    elif request.node.get_closest_marker("system"):
+        request.node.add_marker(pytest.mark.timeout(120))
+    elif request.node.get_closest_marker("stress"):
+        request.node.add_marker(pytest.mark.timeout(300))

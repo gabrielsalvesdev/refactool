@@ -1,27 +1,91 @@
 import os
 import multiprocessing
+from celery.signals import worker_ready
+from prometheus_client import Counter, Gauge
 
-# Configurações de broker e backend
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+# Configurações base
+broker_url = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', 6379)}/0"
+result_backend = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', 6379)}/1"
 
-broker_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
-result_backend = f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
+# Configurações de Pool
+worker_pool = os.getenv("CELERY_WORKER_POOL", "solo")
+worker_concurrency = int(os.getenv("CELERY_WORKER_CONCURRENCY", "1"))
+worker_max_tasks_per_child = int(os.getenv("CELERY_MAX_TASKS_PER_CHILD", "10"))
 
-# Configurações de timeout e retry
+# Timeouts e Retries
+task_acks_late = True
+task_reject_on_worker_lost = True
 task_time_limit = 300  # 5 minutos
 task_soft_time_limit = 240  # 4 minutos
-task_default_retry_delay = 5
+
+# Configurações de Retry
+task_default_retry_delay = 5  # 5 segundos
 task_max_retries = 3
+
+# Configurações de Queue
+task_default_queue = "default"
+task_queues = {
+    "default": {
+        "exchange": "default",
+        "routing_key": "default",
+    },
+    "high_priority": {
+        "exchange": "high_priority",
+        "routing_key": "high_priority",
+    },
+    "stress_tests": {
+        "exchange": "stress_tests",
+        "routing_key": "stress_tests",
+    }
+}
+
+# Métricas
+worker_tasks_active = Gauge(
+    "celery_worker_tasks_active",
+    "Number of tasks currently being executed",
+    ["worker_name"]
+)
+
+worker_tasks_completed = Counter(
+    "celery_worker_tasks_completed",
+    "Number of tasks completed by the worker",
+    ["worker_name", "status"]
+)
+
+@worker_ready.connect
+def setup_worker_metrics(sender, **kwargs):
+    """Configura métricas quando o worker inicia"""
+    worker_tasks_active.labels(sender.hostname).set(0)
+
+# Configurações de Logging
+worker_log_format = "[%(asctime)s: %(levelname)s/%(processName)s] %(message)s"
+worker_task_log_format = "[%(asctime)s: %(levelname)s/%(processName)s] [%(task_name)s(%(task_id)s)] %(message)s"
+
+# Configurações de Rate Limiting
+task_annotations = {
+    "tasks.analyze_code_task": {
+        "rate_limit": "10/m"  # 10 execuções por minuto
+    }
+}
+
+# Configurações específicas para testes de stress
+if os.getenv("TEST_TYPE") == "stress":
+    worker_concurrency = 4
+    worker_max_tasks_per_child = 100
+    task_time_limit = 600  # 10 minutos
+    task_soft_time_limit = 540  # 9 minutos
+    task_default_retry_delay = 10
+    task_annotations = {
+        "tasks.analyze_code_task": {
+            "rate_limit": "30/m"  # 30 execuções por minuto em testes de stress
+        }
+    }
 
 # Configurações de worker
 worker_prefetch_multiplier = 4
-worker_max_tasks_per_child = 100
 worker_concurrency = multiprocessing.cpu_count()
 
 # Configurações de task
-task_acks_late = True
-task_reject_on_worker_lost = True
 task_serializer = 'json'
 result_serializer = 'json'
 accept_content = ['json']
@@ -42,23 +106,9 @@ task_routes = {
     'merge_results': {'queue': 'merge'}
 }
 
-# Configurações de rate limiting
-task_annotations = {
-    'analyze_code_task': {
-        'rate_limit': '10/m'
-    },
-    'analyze_directory': {
-        'rate_limit': '20/m'
-    }
-}
-
 # Configurações de monitoramento
 worker_send_task_events = True
 task_send_sent_event = True
-
-# Configurações de logging
-worker_log_format = '[%(asctime)s: %(levelname)s/%(processName)s] %(message)s'
-worker_task_log_format = '[%(asctime)s: %(levelname)s/%(processName)s] [%(task_name)s(%(task_id)s)] %(message)s'
 
 # Configurações de pool
 worker_pool_restarts = True
