@@ -1,12 +1,16 @@
 from collections import OrderedDict
 import sys
 import hashlib
+import threading
+import time
+from typing import Any, Optional
 
 class LRUCache:
     """
-    Implementação de um cache LRU (Least Recently Used) com controle de memória e versionamento
+    Implementação de um cache LRU (Least Recently Used) com controle de memória,
+    versionamento e timeouts
     """
-    def __init__(self, max_memory_mb=20, version=1):
+    def __init__(self, max_memory_mb=20, version=1, default_timeout=30):
         """
         Inicializa o cache com um limite máximo de memória em MB
         """
@@ -14,6 +18,9 @@ class LRUCache:
         self.cache = OrderedDict()
         self.memory_usage = 0
         self.version = version
+        self.default_timeout = default_timeout
+        self.lock = threading.RLock()
+        self.timeouts = {}  # Armazena timestamps de expiração
 
     def _get_versioned_key(self, key):
         """
@@ -21,73 +28,121 @@ class LRUCache:
         """
         return f"v{self.version}:{key}"
 
-    def get(self, key):
+    def _is_expired(self, key):
         """
-        Obtém um valor do cache. Move o item para o final (mais recentemente usado)
+        Verifica se uma chave está expirada
         """
-        versioned_key = self._get_versioned_key(key)
-        if versioned_key not in self.cache:
-            return None
-        
-        # Move para o final
-        value = self.cache.pop(versioned_key)
-        self.cache[versioned_key] = value
-        return value
+        if key in self.timeouts:
+            return time.time() > self.timeouts[key]
+        return False
 
-    def put(self, key, value):
+    def _cleanup_expired(self):
         """
-        Insere um valor no cache. Se necessário, remove itens antigos para liberar memória
+        Remove itens expirados do cache
         """
-        versioned_key = self._get_versioned_key(key)
-        
-        # Se a chave já existe, remove primeiro
-        if versioned_key in self.cache:
-            old_value = self.cache.pop(versioned_key)
-            self.memory_usage -= sys.getsizeof(old_value)
-        
-        # Calcula o tamanho do novo valor
-        value_size = sys.getsizeof(value)
-        
-        # Remove itens antigos até ter espaço suficiente
-        while self.memory_usage + value_size > self.max_memory and self.cache:
-            _, oldest_value = self.cache.popitem(last=False)
-            self.memory_usage -= sys.getsizeof(oldest_value)
-        
-        # Adiciona o novo item
-        self.cache[versioned_key] = value
-        self.memory_usage += value_size
+        current_time = time.time()
+        expired_keys = [
+            k for k, t in self.timeouts.items() 
+            if current_time > t
+        ]
+        for key in expired_keys:
+            self._remove_item(key)
 
-    def force_eviction(self):
+    def _remove_item(self, key):
+        """
+        Remove um item do cache e atualiza uso de memória
+        """
+        if key in self.cache:
+            value = self.cache.pop(key)
+            self.memory_usage -= sys.getsizeof(value)
+            self.timeouts.pop(key, None)
+
+    def get(self, key: str, default: Any = None) -> Optional[Any]:
+        """
+        Obtém um valor do cache com timeout. Move o item para o final (mais recentemente usado)
+        """
+        with self.lock:
+            self._cleanup_expired()
+            versioned_key = self._get_versioned_key(key)
+            
+            if versioned_key not in self.cache or self._is_expired(versioned_key):
+                return default
+            
+            # Move para o final e retorna
+            value = self.cache.pop(versioned_key)
+            self.cache[versioned_key] = value
+            return value
+
+    def put(self, key: str, value: Any, timeout: Optional[int] = None) -> None:
+        """
+        Insere um valor no cache com timeout opcional.
+        Se necessário, remove itens antigos para liberar memória
+        """
+        with self.lock:
+            self._cleanup_expired()
+            versioned_key = self._get_versioned_key(key)
+            
+            # Remove item existente se houver
+            if versioned_key in self.cache:
+                self._remove_item(versioned_key)
+            
+            # Calcula o tamanho do novo valor
+            value_size = sys.getsizeof(value)
+            
+            # Remove itens antigos até ter espaço suficiente
+            while self.memory_usage + value_size > self.max_memory and self.cache:
+                _, oldest_value = self.cache.popitem(last=False)
+                self.memory_usage -= sys.getsizeof(oldest_value)
+            
+            # Adiciona o novo item
+            self.cache[versioned_key] = value
+            self.memory_usage += value_size
+            
+            # Define timeout
+            if timeout is not None:
+                self.timeouts[versioned_key] = time.time() + timeout
+            elif self.default_timeout:
+                self.timeouts[versioned_key] = time.time() + self.default_timeout
+
+    def force_eviction(self) -> None:
         """
         Força a remoção de itens até que o uso de memória esteja abaixo do limite
         """
-        while self.memory_usage > self.max_memory and self.cache:
-            _, value = self.cache.popitem(last=False)
-            self.memory_usage -= sys.getsizeof(value)
+        with self.lock:
+            self._cleanup_expired()
+            while self.memory_usage > self.max_memory and self.cache:
+                self._remove_item(next(iter(self.cache)))
 
-    def get_memory_usage(self):
+    def get_memory_usage(self) -> int:
         """
         Retorna o uso atual de memória em bytes
         """
         return self.memory_usage
 
-    def clear(self):
+    def clear(self) -> None:
         """
         Limpa todo o cache
         """
-        self.cache.clear()
-        self.memory_usage = 0
+        with self.lock:
+            self.cache.clear()
+            self.memory_usage = 0
+            self.timeouts.clear()
 
-    def exists(self, key):
+    def exists(self, key: str) -> bool:
         """
-        Verifica se uma chave existe no cache
+        Verifica se uma chave existe e não está expirada no cache
         """
-        versioned_key = self._get_versioned_key(key)
-        return versioned_key in self.cache
+        with self.lock:
+            versioned_key = self._get_versioned_key(key)
+            return (
+                versioned_key in self.cache and 
+                not self._is_expired(versioned_key)
+            )
 
-    def update_version(self, new_version):
+    def update_version(self, new_version: int) -> None:
         """
         Atualiza a versão do cache, invalidando todas as chaves antigas
         """
-        self.version = new_version
-        self.clear()  # Limpa o cache ao atualizar a versão 
+        with self.lock:
+            self.version = new_version
+            self.clear()  # Limpa o cache ao atualizar a versão 

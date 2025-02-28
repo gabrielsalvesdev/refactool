@@ -12,6 +12,14 @@ from redis import Redis
 from typing import Dict
 from api.src.analyzers.code_analyzer import CodeAnalyzer
 from api.src.cache.lru_cache import LRUCache
+from api.src.monitoring.metrics import (
+    monitor_task, 
+    update_cache_metrics, 
+    update_cache_memory,
+    log_retry
+)
+from celery import chain, group
+import sys
 
 # Configuração do cache LRU global
 lru_cache = LRUCache(max_memory_mb=100, version=2)
@@ -45,10 +53,89 @@ celery = Celery(
     backend=f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
 )
 
-@celery.task(name="analyze_code_task", bind=True)
+# Configurações otimizadas para melhor performance
+celery.conf.update(
+    task_time_limit=300,  # 5 minutos
+    task_soft_time_limit=240,  # 4 minutos
+    worker_prefetch_multiplier=4,  # Ajustado para melhor throughput
+    worker_max_tasks_per_child=100,  # Aumentado para reduzir overhead
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_serializer='json',
+    result_serializer='json',
+    accept_content=['json'],
+    redis_socket_connect_timeout=30,
+    redis_socket_timeout=30,
+    broker_transport_options={
+        'visibility_timeout': 3600,
+        'socket_timeout': 30,
+        'socket_connect_timeout': 30
+    }
+)
+
+def should_partition_task(path: str) -> bool:
+    """
+    Determina se uma task deve ser particionada baseado no tamanho do projeto
+    """
+    try:
+        size = get_project_size(path)
+        return size > 5_000_000  # 5MB
+    except:
+        return False
+
+@celery.task(name="analyze_directory")
+def analyze_directory(path: str) -> Dict:
+    """
+    Analisa um diretório específico do projeto
+    """
+    try:
+        analyzer = CodeAnalyzer()
+        result = analyzer.analyze_project(path)
+        return {
+            "status": "SUCCESS",
+            "result": result,
+            "path": path
+        }
+    except Exception as e:
+        return {
+            "status": "ERROR",
+            "error": str(e),
+            "path": path
+        }
+
+@celery.task(name="merge_results")
+def merge_results(results: list) -> Dict:
+    """
+    Combina resultados de múltiplas análises
+    """
+    merged = {
+        "status": "SUCCESS",
+        "result": {},
+        "errors": []
+    }
+    
+    for r in results:
+        if r["status"] == "SUCCESS":
+            merged["result"].update(r["result"])
+        else:
+            merged["errors"].append(r)
+    
+    return merged
+
+@celery.task(
+    name="analyze_code_task", 
+    bind=True,
+    soft_time_limit=300,
+    hard_time_limit=360,
+    autoretry_for=(TimeoutError,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    max_retries=3
+)
+@monitor_task
 def analyze_code_task(self, path: str) -> Dict:
     """
-    Tarefa Celery para análise de código
+    Tarefa Celery para análise de código com retry, timeout e monitoramento
     """
     try:
         # Verifica se o caminho existe
@@ -58,28 +145,65 @@ def analyze_code_task(self, path: str) -> Dict:
                 "error": "Caminho inválido ou não existe"
             }
 
-        # Verifica cache LRU primeiro
+        # Se o projeto for muito grande, particiona em subtarefas
+        if should_partition_task(path):
+            logger.info(f"Particionando análise do projeto: {path}")
+            directories = [
+                d for d in Path(path).iterdir() 
+                if d.is_dir() and not d.name.startswith('.')
+            ]
+            
+            # Cria grupo de subtarefas
+            subtasks = group(
+                analyze_directory.s(str(d)) 
+                for d in directories
+            )
+            
+            # Encadeia com task de merge
+            workflow = chain(
+                subtasks,
+                merge_results.s()
+            )
+            
+            return workflow()
+
+        # Verifica cache LRU primeiro com timeout reduzido
         hash_val = hashlib.sha256(path.encode()).hexdigest()
-        cached_result = lru_cache.get(hash_val)
-        if cached_result:
-            cache_hits.add(1)
-            return json.loads(cached_result)
+        try:
+            cached_result = lru_cache.get(hash_val)
+            if cached_result:
+                update_cache_metrics('lru', hit=True)
+                update_cache_memory('lru', lru_cache.get_memory_usage())
+                return json.loads(cached_result)
+        except Exception as e:
+            logger.warning("Erro ao acessar cache LRU", error=str(e))
+            update_cache_metrics('lru', hit=False)
         
-        # Verifica cache Redis
+        # Verifica cache Redis com timeout
         cache_key = f"analysis_v2:{hash_val}"
         try:
             cached = redis_cache.get(cache_key)
             if cached:
                 # Atualiza o cache LRU
                 lru_cache.put(hash_val, cached)
-                cache_hits.add(1)
+                update_cache_metrics('redis', hit=True)
                 return json.loads(cached)
         except Exception as e:
             logger.warning("Erro ao acessar cache Redis", error=str(e))
-        
-        # Executa análise
-        analyzer = CodeAnalyzer()
-        result = analyzer.analyze_project(path)
+            update_cache_metrics('redis', hit=False)
+            
+        # Executa análise com timeout
+        try:
+            analyzer = CodeAnalyzer()
+            result = analyzer.analyze_project(path)
+        except TimeoutError:
+            logger.error(f"Timeout na análise do projeto: {path}")
+            log_retry(self.request.id)
+            self.retry(countdown=int(2 ** self.request.retries))
+            return {
+                "status": "RETRY",
+                "error": "Timeout na análise"
+            }
         
         # Prepara resultado
         result_data = {
@@ -92,14 +216,18 @@ def analyze_code_task(self, path: str) -> Dict:
         result_json = json.dumps(result_data)
         
         try:
-            # Salva no cache Redis
-            ttl = int(os.getenv("CACHE_TTL", 3600))
+            # Salva no cache Redis com TTL dinâmico
+            project_size = get_project_size(path)
+            ttl = 3600 if project_size < 1_000_000 else 600
             redis_cache.setex(cache_key, ttl, result_json.encode('utf-8'))
+            update_cache_memory('redis', sys.getsizeof(result_json))
             
             # Salva no cache LRU
             lru_cache.put(hash_val, result_json)
+            update_cache_memory('lru', lru_cache.get_memory_usage())
             
-            cache_misses.add(1)
+            update_cache_metrics('redis', hit=False)
+            update_cache_metrics('lru', hit=False)
         except Exception as e:
             logger.warning("Erro ao salvar no cache", error=str(e))
             
