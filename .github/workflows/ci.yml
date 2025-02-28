@@ -262,14 +262,12 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
-        mkdir -p reports/integration
-        touch reports/integration/.gitkeep
         if [ -d "tests" ]; then
           pytest -v tests/ -m "integration" --cov=api --cov-report=xml:reports/integration/coverage.xml --cov-report=html:reports/integration/htmlcov --junitxml=reports/integration/test-results.xml || echo "Testes de integração concluídos"
           echo "Relatórios gerados em reports/integration"
         else
           echo "Diretório de testes não encontrado"
-          echo "{}" > reports/integration/empty-report.json
+          echo "{\"message\": \"No tests found\"}" > reports/integration/empty-report.json
         fi
         
     - name: Upload test results
@@ -342,14 +340,12 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
-        mkdir -p reports/system
-        touch reports/system/.gitkeep
         if [ -d "tests" ]; then
           pytest -v tests/ -m "system" --cov=api --cov-report=xml:reports/system/coverage.xml --cov-report=html:reports/system/htmlcov --junitxml=reports/system/test-results.xml || echo "Testes de sistema concluídos"
           echo "Relatórios gerados em reports/system"
         else
           echo "Diretório de testes não encontrado"
-          echo "{}" > reports/system/empty-report.json
+          echo "{\"message\": \"No tests found\"}" > reports/system/empty-report.json
         fi
         
     - name: Upload test results
@@ -422,14 +418,12 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
-        mkdir -p reports/stress
-        touch reports/stress/.gitkeep
         if [ -d "tests" ]; then
           pytest -v tests/ -m "stress" --cov=api --cov-report=xml:reports/stress/coverage.xml --cov-report=html:reports/stress/htmlcov --junitxml=reports/stress/test-results.xml || echo "Testes de stress concluídos"
           echo "Relatórios gerados em reports/stress"
         else
           echo "Diretório de testes não encontrado"
-          echo "{}" > reports/stress/empty-report.json
+          echo "{\"message\": \"No tests found\"}" > reports/stress/empty-report.json
         fi
         
     - name: Upload test results
