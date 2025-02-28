@@ -14,14 +14,16 @@ multi_line_output = 3
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q"
-testpaths = [
-    "tests",
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "unit: testes unitários",
+    "integration: testes de integração",
+    "system: testes de sistema",
+    "stress: testes de stress"
 ]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
-markers = [
-    "stress: marks tests as stress tests (deselect with '-m \"not stress\"')",
-]
 
 [tool.coverage.run]
 source = ["microservices"]

@@ -14,30 +14,9 @@ env:
   PYTHONPATH: ${{ github.workspace }}
 
 jobs:
-  unit-tests:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.8"
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements.txt
-      
-      - name: Run unit tests
-        run: |
-          pytest -v -m "unit" --junitxml=test-reports/unit-tests.xml
-
-  integration-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    
     services:
       redis:
         image: redis:latest
@@ -45,120 +24,52 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 5s
+          --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.8"
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements.txt
-      
-      - name: Run Celery (Integration)
-        run: |
-          celery -A api.src.tasks.celery worker --loglevel=INFO --pool=solo &
-      
-      - name: Run integration tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          pytest -v -m "integration" --junitxml=test-reports/integration-tests.xml
-
-  system-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      redis:
-        image: redis:latest
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 10s
-          --health-retries 10
-
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.8"
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements.txt
-      
-      - name: Run Celery (System)
-        run: |
-          celery -A api.src.tasks.celery worker --loglevel=INFO --pool=prefork --concurrency=2 &
-      
-      - name: Run system tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          pytest -v -m "system" --junitxml=test-reports/system-tests.xml
-
-  stress-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    services:
-      redis:
-        image: redis:latest
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 10s
-          --health-retries 10
-        env:
-          REDIS_MAXMEMORY: 4gb
-          REDIS_MAXMEMORY_POLICY: allkeys-lru
-
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.8"
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install -r requirements.txt
-      
-      - name: Run Celery (Stress)
-        run: |
-          celery -A api.src.tasks.celery worker --loglevel=INFO --pool=prefork --concurrency=4 --max-tasks-per-child=100 &
-      
-      - name: Run stress tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          pytest -v -m "stress" --junitxml=test-reports/stress-tests.xml
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: test-reports/*.xml
-          retention-days: 7
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-timeout pytest-asyncio
+        
+    - name: Start Celery worker
+      run: |
+        celery -A api.src.tasks worker --loglevel=info &
+        sleep 5
+        
+    - name: Run unit tests
+      run: |
+        pytest -v -m "unit" --junitxml=test-reports/unit-tests.xml
+        
+    - name: Run integration tests  
+      run: |
+        pytest -v -m "integration" --junitxml=test-reports/integration-tests.xml
+        
+    - name: Run system tests
+      run: |
+        pytest -v -m "system" --junitxml=test-reports/system-tests.xml
+        
+    - name: Run stress tests
+      run: |
+        pytest -v -m "stress" --junitxml=test-reports/stress-tests.xml
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: test-results
+        path: test-reports/
+        retention-days: 7
 
   quality:
     runs-on: ubuntu-latest
@@ -220,7 +131,7 @@ jobs:
           retention-days: 7
 
   publish:
-    needs: [unit-tests, integration-tests, system-tests, stress-tests, quality, security]
+    needs: [test, quality, security]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -267,7 +178,7 @@ jobs:
           ack_no_webhook: true
 
   docker:
-    needs: [unit-tests, integration-tests, system-tests, stress-tests, quality, security]
+    needs: [test, quality, security]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
