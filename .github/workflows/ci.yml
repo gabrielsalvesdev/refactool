@@ -113,12 +113,21 @@ jobs:
           fi
         done
         
-    - name: Type check
-      if: success()
+    - name: Setup reports directory
       shell: bash
       run: |
         mkdir -p reports/mypy
         touch reports/mypy/.gitkeep
+        if [ ! -d "api" ] && [ ! -d "tests" ]; then
+          echo "Nenhum diretório Python encontrado para verificação de tipos"
+          echo "{\"message\": \"No Python directories found\", \"status\": \"skipped\"}" > reports/mypy/empty-report.json
+          exit 0
+        fi
+        
+    - name: Type check
+      if: success()
+      shell: bash
+      run: |
         if [ -d "api" ] || [ -d "tests" ]; then
           mypy api tests --ignore-missing-imports --html-report reports/mypy || (
             echo "Verificação de tipos concluída com erros"
@@ -130,9 +139,6 @@ jobs:
             echo "Nenhum problema de tipagem encontrado"
             echo "{\"message\": \"No type issues found\", \"status\": \"success\"}" > reports/mypy/empty-report.json
           fi
-        else
-          echo "Nenhum diretório Python encontrado para verificação de tipos"
-          echo "{\"message\": \"No Python directories found\", \"status\": \"skipped\"}" > reports/mypy/empty-report.json
         fi
 
     - name: Upload type check results
