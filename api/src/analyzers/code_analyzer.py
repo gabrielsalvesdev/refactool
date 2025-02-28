@@ -306,4 +306,88 @@ class CodeAnalyzer:
             elif isinstance(n, ast.Assign):
                 attribute_count += len(n.targets)
         
-        return method_count > 20 or attribute_count > 15 
+        return method_count > 20 or attribute_count > 15
+
+    def analyze_project(self, project_path: str) -> Dict:
+        """
+        Analisa um projeto inteiro.
+        
+        Args:
+            project_path: Caminho do diretório do projeto
+            
+        Returns:
+            Dicionário com resultados da análise
+        """
+        try:
+            from pathlib import Path
+            
+            total_analysis = CodeAnalysis()
+            all_smells = []
+            
+            # Analisa todos os arquivos .py
+            for file_path in Path(project_path).rglob("*.py"):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    
+                    # Analisa o arquivo
+                    file_smells = self.analyze_file(str(file_path), content)
+                    all_smells.extend(file_smells)
+                    
+                    # Atualiza métricas
+                    lines = content.splitlines()
+                    total_analysis.total_lines += len(lines)
+                    total_analysis.metrics.total_lines += len(lines)
+                    total_analysis.metrics.blank_lines += len([l for l in lines if not l.strip()])
+                    total_analysis.metrics.code_lines += len([l for l in lines if l.strip() and not l.strip().startswith("#")])
+                    
+                    # Analisa funções e classes
+                    tree = ast.parse(content)
+                    total_analysis.total_functions += len([n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))])
+                    total_analysis.total_classes += len([n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)])
+                    
+                except Exception as e:
+                    logger.error(
+                        "code_analyzer.file_analysis_failed",
+                        error=str(e),
+                        error_type=type(e).__name__,
+                        file=str(file_path)
+                    )
+            
+            # Calcula médias
+            if total_analysis.metrics.code_lines > 0:
+                total_analysis.metrics.complexity = sum(s.severity for s in all_smells) / total_analysis.metrics.code_lines
+            
+            return {
+                "metrics": {
+                    "total_lines": total_analysis.total_lines,
+                    "total_functions": total_analysis.total_functions,
+                    "total_classes": total_analysis.total_classes,
+                    "code_lines": total_analysis.metrics.code_lines,
+                    "blank_lines": total_analysis.metrics.blank_lines,
+                    "complexity": total_analysis.metrics.complexity
+                },
+                "smells": [
+                    {
+                        "type": smell.type.value,
+                        "file": smell.file,
+                        "line": smell.line,
+                        "message": smell.message,
+                        "severity": smell.severity,
+                        "suggestion": smell.suggestion
+                    }
+                    for smell in all_smells
+                ]
+            }
+            
+        except Exception as e:
+            logger.error(
+                "code_analyzer.project_analysis_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                project=project_path
+            )
+            return {
+                "error": str(e),
+                "type": type(e).__name__
+            } 

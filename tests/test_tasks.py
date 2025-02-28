@@ -1,31 +1,20 @@
 from api.src.tasks import analyze_code_task
-import requests
+from pathlib import Path
+import pytest
 
 
-class DummyResponse:
-    def __init__(self):
-        self._json = {"issues": []}
-    def json(self):
-        return self._json
+def test_task_success():
+    # Usa o diretório de testes como projeto válido
+    test_dir = Path(__file__).parent
+    result = analyze_code_task.apply(args=[str(test_dir)]).get()
+    assert result["status"] == "SUCCESS"
+    assert "result" in result
+    assert "metrics" in result["result"]
+    assert "smells" in result["result"]
 
 
-def fake_post_success(url, json):
-    return DummyResponse()
-
-
-def fake_post_failure(url, json):
-    raise Exception("Simulated failure")
-
-
-def test_task_success(monkeypatch):
-    # Monkey patch requests.post to simulate a successful analysis
-    monkeypatch.setattr(requests, "post", fake_post_success)
-    result = analyze_code_task.apply(args=["/fake/path"]).get()
-    assert result["status"] == "COMPLETED"
-
-
-def test_task_failure(monkeypatch):
-    # Monkey patch requests.post to simulate a failure in the task
-    monkeypatch.setattr(requests, "post", fake_post_failure)
-    result = analyze_code_task.apply(args=["/invalid"]).get()
-    assert result["status"] == "FAILED" 
+def test_task_failure():
+    # Testa com um caminho inválido
+    result = analyze_code_task.apply(args=["/invalid/path"]).get()
+    assert result["status"] == "ERROR"
+    assert "error" in result 

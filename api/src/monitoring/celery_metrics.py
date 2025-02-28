@@ -46,6 +46,9 @@ def track_task_metrics(task_id, task, **kwargs):
     if getattr(task, 'failed', False):
         task_failures.add(1, labels)
     else:
-        # Calcula a duração da task, considerando que date_started e date_done sejam datetime
-        duration = (task.date_done - task.date_started).total_seconds()
-        task_duration.record(duration, labels) 
+        # Calcula a duração da task se os timestamps estiverem disponíveis
+        date_started = getattr(task, 'date_started', None)
+        date_done = getattr(task, 'date_done', None)
+        if date_started and date_done:
+            duration = (date_done - date_started).total_seconds()
+            task_duration.record(duration, labels) 

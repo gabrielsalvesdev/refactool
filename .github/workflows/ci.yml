@@ -15,16 +15,17 @@ jobs:
     runs-on: ubuntu-latest
     services:
       redis:
-        image: redis
+        image: redis:latest
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
           --name redis
           --network-alias redis
+          --network host
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,11 +40,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pytest pytest-cov pytest-asyncio
+          pip install pytest pytest-cov pytest-asyncio redis
+      
+      - name: Wait for Redis
+        run: |
+          echo "Aguardando Redis ficar disponível..."
+          timeout 30 bash -c 'until redis-cli ping; do sleep 1; done'
       
       - name: Run tests
         env:
-          REDIS_HOST: redis
+          REDIS_HOST: localhost
           REDIS_PORT: 6379
         run: |
           mkdir -p test-reports/coverage
