@@ -13,7 +13,7 @@ from typing import Dict
 from api.src.analyzers.code_analyzer import CodeAnalyzer
 
 # Atualização: Usar variáveis de ambiente para configuração do Redis
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")  # Alterado default para redis
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
 # Atualização: Usar DB 1 para cache com retry e timeout
@@ -23,8 +23,8 @@ redis_cache = Redis(
     db=1,
     decode_responses=False,  # Armazena como bytes
     retry_on_timeout=True,
-    socket_connect_timeout=1,
-    socket_timeout=1
+    socket_connect_timeout=5,  # Aumentado para 5 segundos
+    socket_timeout=5  # Aumentado para 5 segundos
 )
 
 # Importar métricas de cache

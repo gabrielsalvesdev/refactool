@@ -6,7 +6,7 @@ import os
 @pytest.fixture(scope="session", autouse=True)
 def setup_env():
     """Configura variáveis de ambiente para testes."""
-    os.environ["REDIS_HOST"] = "localhost"
+    os.environ["REDIS_HOST"] = "redis"
     os.environ["REDIS_PORT"] = "6379"
     os.environ["CACHE_TTL"] = "3600"
     os.environ["API_KEY"] = "test_key"
@@ -20,7 +20,7 @@ def setup_env():
 @pytest.fixture(scope="session")
 def redis_connection():
     """Fixture para conexão com Redis."""
-    redis_host = os.getenv("REDIS_HOST", "localhost")
+    redis_host = os.getenv("REDIS_HOST", "redis")
     redis_port = int(os.getenv("REDIS_PORT", 6379))
     
     redis = Redis(
@@ -29,15 +29,23 @@ def redis_connection():
         db=1,  # Usar DB 1 para testes
         decode_responses=False,
         retry_on_timeout=True,
-        socket_connect_timeout=1,
-        socket_timeout=1
+        socket_connect_timeout=5,
+        socket_timeout=5
     )
     
     try:
-        # Testa a conexão
-        redis.ping()
-    except:
-        pytest.skip("Redis não está disponível")
+        # Testa a conexão com retry
+        for _ in range(3):  # Tenta 3 vezes
+            try:
+                redis.ping()
+                break
+            except:
+                import time
+                time.sleep(1)  # Espera 1 segundo entre tentativas
+        else:
+            pytest.skip("Redis não está disponível após 3 tentativas")
+    except Exception as e:
+        pytest.skip(f"Redis não está disponível: {str(e)}")
     
     # Limpa o banco antes dos testes
     redis.flushdb()
