@@ -120,16 +120,19 @@ jobs:
         mkdir -p reports/mypy
         touch reports/mypy/.gitkeep
         if [ -d "api" ] || [ -d "tests" ]; then
-          mypy api tests --ignore-missing-imports --html-report reports/mypy || echo "Verificação de tipos concluída"
+          mypy api tests --ignore-missing-imports --html-report reports/mypy || (
+            echo "Verificação de tipos concluída com erros"
+            echo "{\"message\": \"Type check completed with errors\", \"status\": \"failed\"}" > reports/mypy/error-report.json
+          )
           if [ -f "reports/mypy/index.html" ]; then
             echo "Relatório de type-check gerado em reports/mypy"
           else
             echo "Nenhum problema de tipagem encontrado"
-            echo "{\"message\": \"No type issues found\"}" > reports/mypy/empty-report.json
+            echo "{\"message\": \"No type issues found\", \"status\": \"success\"}" > reports/mypy/empty-report.json
           fi
         else
           echo "Nenhum diretório Python encontrado para verificação de tipos"
-          echo "{\"message\": \"No Python directories found\"}" > reports/mypy/empty-report.json
+          echo "{\"message\": \"No Python directories found\", \"status\": \"skipped\"}" > reports/mypy/empty-report.json
         fi
 
     - name: Upload type check results
@@ -188,11 +191,14 @@ jobs:
         mkdir -p reports/unit
         touch reports/unit/.gitkeep
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "unit" --cov=api --cov-report=xml:reports/unit/coverage.xml --cov-report=html:reports/unit/htmlcov --junitxml=reports/unit/test-results.xml || echo "Testes unitários concluídos"
+          pytest -v tests/ -m "unit" --cov=api --cov-report=xml:reports/unit/coverage.xml --cov-report=html:reports/unit/htmlcov --junitxml=reports/unit/test-results.xml || (
+            echo "Testes unitários concluídos com falhas"
+            echo "{\"message\": \"Unit tests completed with failures\", \"status\": \"failed\"}" > reports/unit/error-report.json
+          )
           echo "Relatórios gerados em reports/unit"
         else
           echo "Diretório de testes não encontrado"
-          echo "{\"message\": \"No tests found\"}" > reports/unit/empty-report.json
+          echo "{\"message\": \"No tests found\", \"status\": \"skipped\"}" > reports/unit/empty-report.json
         fi
         
     - name: Upload test results
@@ -265,12 +271,17 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
+        mkdir -p reports/integration
+        touch reports/integration/.gitkeep
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "integration" --cov=api --cov-report=xml:reports/integration/coverage.xml --cov-report=html:reports/integration/htmlcov --junitxml=reports/integration/test-results.xml || echo "Testes de integração concluídos"
+          pytest -v tests/ -m "integration" --cov=api --cov-report=xml:reports/integration/coverage.xml --cov-report=html:reports/integration/htmlcov --junitxml=reports/integration/test-results.xml || (
+            echo "Testes de integração concluídos com falhas"
+            echo "{\"message\": \"Integration tests completed with failures\", \"status\": \"failed\"}" > reports/integration/error-report.json
+          )
           echo "Relatórios gerados em reports/integration"
         else
           echo "Diretório de testes não encontrado"
-          echo "{\"message\": \"No tests found\"}" > reports/integration/empty-report.json
+          echo "{\"message\": \"No tests found\", \"status\": \"skipped\"}" > reports/integration/empty-report.json
         fi
         
     - name: Upload test results
@@ -343,12 +354,17 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
+        mkdir -p reports/system
+        touch reports/system/.gitkeep
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "system" --cov=api --cov-report=xml:reports/system/coverage.xml --cov-report=html:reports/system/htmlcov --junitxml=reports/system/test-results.xml || echo "Testes de sistema concluídos"
+          pytest -v tests/ -m "system" --cov=api --cov-report=xml:reports/system/coverage.xml --cov-report=html:reports/system/htmlcov --junitxml=reports/system/test-results.xml || (
+            echo "Testes de sistema concluídos com falhas"
+            echo "{\"message\": \"System tests completed with failures\", \"status\": \"failed\"}" > reports/system/error-report.json
+          )
           echo "Relatórios gerados em reports/system"
         else
           echo "Diretório de testes não encontrado"
-          echo "{\"message\": \"No tests found\"}" > reports/system/empty-report.json
+          echo "{\"message\": \"No tests found\", \"status\": \"skipped\"}" > reports/system/empty-report.json
         fi
         
     - name: Upload test results
@@ -421,12 +437,17 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
       shell: bash
       run: |
+        mkdir -p reports/stress
+        touch reports/stress/.gitkeep
         if [ -d "tests" ]; then
-          pytest -v tests/ -m "stress" --cov=api --cov-report=xml:reports/stress/coverage.xml --cov-report=html:reports/stress/htmlcov --junitxml=reports/stress/test-results.xml || echo "Testes de stress concluídos"
+          pytest -v tests/ -m "stress" --cov=api --cov-report=xml:reports/stress/coverage.xml --cov-report=html:reports/stress/htmlcov --junitxml=reports/stress/test-results.xml || (
+            echo "Testes de stress concluídos com falhas"
+            echo "{\"message\": \"Stress tests completed with failures\", \"status\": \"failed\"}" > reports/stress/error-report.json
+          )
           echo "Relatórios gerados em reports/stress"
         else
           echo "Diretório de testes não encontrado"
-          echo "{\"message\": \"No tests found\"}" > reports/stress/empty-report.json
+          echo "{\"message\": \"No tests found\", \"status\": \"skipped\"}" > reports/stress/empty-report.json
         fi
         
     - name: Upload test results
