@@ -24,8 +24,9 @@ def test_system_metrics(redis_connection):
     path = "tests/sample_project"
     
     # Executa algumas análises
-    tasks = [analyze_code_task.delay(path) for _ in range(3)]
-    results = [t.get(timeout=60) for t in tasks]
+    for _ in range(3):
+        result = analyze_code_task.delay(path)
+        result.get(timeout=60)
     
     # Verifica métricas
     metrics = get_metrics()

@@ -6,7 +6,6 @@ from api.src.main import app
 import pytest
 from api.src.tasks import analyze_code_task
 from api.src.cache.cluster import RedisCluster
-from api.src.cache.lru_cache import LRUCache
 
 client = TestClient(app)
 
@@ -40,12 +39,12 @@ def test_analyze_invalid_path(redis_connection):
         result = analyze_code_task.delay("/invalid/path")
         result.get(timeout=30)
 
-def test_analyze_happy_path():
-    """Testa o caminho feliz da análise de código"""
-    # Usa o diretório de testes como projeto válido
+@pytest.mark.integration
+def test_api_analyze_happy_path():
+    """Testa o caminho feliz da análise de código via API"""
     test_dir = Path(__file__).parent
-    
     api_key = os.getenv("API_KEY", "test_key")
+    
     response = client.post(
         "/analyze", 
         headers={"Authorization": f"Bearer {api_key}"},
@@ -56,9 +55,11 @@ def test_analyze_happy_path():
     assert "status" in data
     assert data["status"] == "SUCCESS"
 
-def test_analyze_invalid_path():
-    """Testa análise com caminho inválido"""
+@pytest.mark.integration
+def test_api_analyze_invalid_path():
+    """Testa análise com caminho inválido via API"""
     api_key = os.getenv("API_KEY", "test_key")
+    
     response = client.post(
         "/analyze", 
         headers={"Authorization": f"Bearer {api_key}"},
