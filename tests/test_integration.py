@@ -3,8 +3,42 @@ import os
 from pathlib import Path
 from fastapi.testclient import TestClient
 from api.src.main import app
+import pytest
+from api.src.tasks import analyze_code_task
+from api.src.cache.cluster import RedisCluster
+from api.src.cache.lru_cache import LRUCache
 
 client = TestClient(app)
+
+@pytest.mark.integration
+def test_analyze_happy_path(redis_connection):
+    path = "tests/sample_project"
+    result = analyze_code_task.delay(path)
+    assert result is not None
+    task_result = result.get(timeout=30)
+    assert task_result["status"] == "COMPLETED"
+    assert "results" in task_result
+
+@pytest.mark.integration
+def test_cache_integration(redis_connection):
+    path = "tests/sample_project"
+    
+    # Primeira execução
+    result1 = analyze_code_task.delay(path)
+    task_result1 = result1.get(timeout=30)
+    
+    # Segunda execução (deve usar cache)
+    result2 = analyze_code_task.delay(path)
+    task_result2 = result2.get(timeout=30)
+    
+    assert task_result1 == task_result2
+    assert task_result1["status"] == "COMPLETED"
+
+@pytest.mark.integration
+def test_analyze_invalid_path(redis_connection):
+    with pytest.raises(ValueError):
+        result = analyze_code_task.delay("/invalid/path")
+        result.get(timeout=30)
 
 def test_analyze_happy_path():
     """Testa o caminho feliz da análise de código"""

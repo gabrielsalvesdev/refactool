@@ -35,3 +35,4 @@ langchain-anthropic>=0.0.1
 slowapi
 psutil==5.9.8
 prometheus-client==0.20.0
+pytest-timeout==2.3.1
