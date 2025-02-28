@@ -48,8 +48,11 @@ jobs:
     - name: Check directories
       shell: bash
       run: |
+        mkdir -p reports/lint
+        touch reports/lint/.gitkeep
         if [ ! -d "api" ] && [ ! -d "tests" ]; then
           echo "Nenhum diretório Python encontrado para análise"
+          echo "{\"message\": \"No Python directories found\"}" > reports/lint/empty-report.json
           exit 0
         fi
         
@@ -58,7 +61,7 @@ jobs:
       shell: bash
       run: |
         if [ -d "api" ] || [ -d "tests" ]; then
-          black api tests --check || true
+          black api tests --check > reports/lint/format-check.txt || echo "Formatação verificada"
         fi
       
     - name: Check formatting
@@ -66,7 +69,7 @@ jobs:
       shell: bash
       run: |
         if [ -d "api" ] || [ -d "tests" ]; then
-          black api tests --check --diff || true
+          black api tests --check --diff > reports/lint/format-diff.txt || echo "Diferenças de formatação identificadas"
         fi
       
     - name: Lint with flake8
@@ -74,17 +77,17 @@ jobs:
       shell: bash
       run: |
         if [ -d "api" ] || [ -d "tests" ]; then
-          flake8 api tests --count --show-source --statistics --max-complexity=10 || true
+          flake8 api tests --count --show-source --statistics --max-complexity=10 > reports/lint/flake8-report.txt || echo "Análise de código concluída"
+          echo "Relatórios gerados em reports/lint"
         fi
         
-    - name: Commit formatting changes
-      if: github.event_name == 'pull_request'
-      shell: bash
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add .
-        git diff --quiet && git diff --staged --quiet || (git commit -m "style: format code with black" && git push)
+    - name: Upload lint results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: lint-results
+        path: reports/lint
+        retention-days: 7
 
   type-check:
     runs-on: ubuntu-latest
@@ -457,7 +460,8 @@ jobs:
       shell: bash
       run: |
         if [ ! -d "api" ] && [ ! -d "tests" ]; then
-          echo "Nenhum diretório Python encontrado para análise de segurança"
+          echo "Nenhum diretório Python encontrado para análise"
+          echo "{\"message\": \"No Python directories found\"}" > security-report.json
           exit 0
         fi
         
@@ -465,19 +469,24 @@ jobs:
       if: success()
       shell: bash
       run: |
-        bandit -r . -f json -o security-report.json -ll --exclude tests/,docs/ || true
-        safety check -r requirements.txt --json > dependencies-report.json || true
-        pip-audit --requirement requirements.txt --format json > audit-report.json || true
+        mkdir -p reports/security
+        touch reports/security/.gitkeep
+        if [ -d "api" ] || [ -d "tests" ]; then
+          bandit -r . -f json -o reports/security/security-report.json -ll --exclude tests/,docs/ || echo "Análise de segurança concluída"
+          safety check -r requirements.txt --json > reports/security/dependencies-report.json || echo "Verificação de dependências concluída"
+          pip-audit --requirement requirements.txt --format json > reports/security/audit-report.json || echo "Auditoria de pacotes concluída"
+          echo "Relatórios gerados em reports/security"
+        else
+          echo "Nenhum diretório Python encontrado para análise de segurança"
+          echo "{\"message\": \"No Python directories found\"}" > reports/security/empty-report.json
+        fi
         
     - name: Upload security reports
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: security-reports
-        path: |
-          security-report.json
-          dependencies-report.json
-          audit-report.json
+        path: reports/security
         retention-days: 7
         
     - name: Check for critical vulnerabilities
@@ -522,11 +531,30 @@ jobs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install build
+        pip install build twine
+        
+    - name: Setup reports directory
+      shell: bash
+      run: |
+        mkdir -p reports/publish
+        touch reports/publish/.gitkeep
         
     - name: Build package
       shell: bash
-      run: python -m build
+      run: |
+        echo "Iniciando build do pacote..."
+        python -m build
+        echo "Build concluído. Verificando artefatos..."
+        ls -la dist/
+        cp dist/* reports/publish/ || echo "Nenhum artefato gerado"
+        
+    - name: Upload build artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: package-artifacts
+        path: reports/publish
+        retention-days: 7
       
     - name: Publish to TestPyPI
       if: github.ref == 'refs/heads/main'
@@ -536,7 +564,7 @@ jobs:
         skip-existing: true
         verbose: true
         print-hash: true
-        
+      
     - name: Publish to PyPI
       if: startsWith(github.ref, 'refs/tags/v')
       uses: pypa/gh-action-pypi-publish@release/v1
@@ -556,6 +584,12 @@ jobs:
       with:
         fetch-depth: 0
     
+    - name: Setup reports directory
+      shell: bash
+      run: |
+        mkdir -p reports/docker
+        touch reports/docker/.gitkeep
+        
     - name: Docker meta
       id: meta
       uses: docker/metadata-action@v5
@@ -586,6 +620,23 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:buildcache
         cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+        
+    - name: Save build info
+      shell: bash
+      run: |
+        echo "Build concluído em $(date)" > reports/docker/build-info.txt
+        echo "Tags geradas:" >> reports/docker/build-info.txt
+        echo "${{ steps.meta.outputs.tags }}" >> reports/docker/build-info.txt
+        echo "Labels:" >> reports/docker/build-info.txt
+        echo "${{ steps.meta.outputs.labels }}" >> reports/docker/build-info.txt
+        
+    - name: Upload Docker build info
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: docker-build-info
+        path: reports/docker
+        retention-days: 7
         
     - name: Update Docker Hub description
       uses: peter-evans/dockerhub-description@v4
