@@ -1,7 +1,7 @@
 from prometheus_client import Counter, Histogram, Gauge
 import time
 from functools import wraps
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict
 import os
 
 try:
@@ -66,6 +66,36 @@ cpu_usage = Gauge(
     ['core']
 )
 
+# Métricas de tarefas
+tasks_completed = Counter(
+    'refactool_tasks_completed_total',
+    'Total de tarefas completadas',
+    ['status']
+)
+
+tasks_duration = Histogram(
+    'refactool_task_duration_seconds',
+    'Duração das tarefas em segundos',
+    ['task_type']
+)
+
+active_tasks = Gauge(
+    'refactool_active_tasks',
+    'Número de tarefas ativas'
+)
+
+# Métricas de cache
+cache_size = Gauge(
+    'refactool_cache_size_bytes',
+    'Tamanho atual do cache em bytes'
+)
+
+# Métricas de sistema
+system_cpu = Gauge(
+    'refactool_system_cpu_percent',
+    'Uso de CPU do sistema'
+)
+
 def monitor_task(func: Callable) -> Callable:
     """
     Decorator para monitorar execução de tasks
@@ -123,6 +153,77 @@ def log_retry(task_id: Optional[str] = None) -> None:
     Registra uma tentativa de retry
     """
     task_retries.inc()
+
+def get_metrics() -> Dict[str, float]:
+    """
+    Retorna um dicionário com as métricas atuais do sistema.
+    """
+    return {
+        "tasks_completed": tasks_completed._value.get(('success',), 0),
+        "tasks_failed": tasks_completed._value.get(('error',), 0),
+        "cache_hits": cache_hits._value.get((), 0),
+        "cache_misses": cache_misses._value.get((), 0),
+        "active_tasks": active_tasks._value.get((), 0),
+        "cache_size": cache_size._value.get((), 0)
+    }
+
+def record_task_completion(status: str = 'success') -> None:
+    """
+    Registra a conclusão de uma tarefa.
+    """
+    tasks_completed.labels(status=status).inc()
+
+def record_task_duration(duration: float, task_type: str = 'analysis') -> None:
+    """
+    Registra a duração de uma tarefa.
+    """
+    tasks_duration.labels(task_type=task_type).observe(duration)
+
+def record_cache_hit() -> None:
+    """
+    Registra um hit no cache.
+    """
+    cache_hits.inc()
+
+def record_cache_miss() -> None:
+    """
+    Registra um miss no cache.
+    """
+    cache_misses.inc()
+
+def update_cache_size(size_bytes: int) -> None:
+    """
+    Atualiza o tamanho do cache.
+    """
+    cache_size.set(size_bytes)
+
+def update_system_metrics(memory_bytes: int, cpu_percent: float) -> None:
+    """
+    Atualiza as métricas do sistema.
+    """
+    system_memory.labels('total').set(memory_bytes)
+    system_memory.labels('used').set(memory_bytes)
+    system_memory.labels('free').set(memory_bytes)
+    system_cpu.set(cpu_percent)
+
+class MetricsTimer:
+    """Classe para medir duração de operações com context manager."""
+    
+    def __init__(self, task_type: str = 'analysis'):
+        self.task_type = task_type
+        self.start_time = None
+        
+    def __enter__(self):
+        self.start_time = time.time()
+        active_tasks.inc()
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.start_time:
+            duration = time.time() - self.start_time
+            record_task_duration(duration, self.task_type)
+            active_tasks.dec()
+            record_task_completion('error' if exc_type else 'success')
 
 class MetricsCollector:
     def __init__(self):
