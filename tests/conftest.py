@@ -7,7 +7,7 @@ import time
 @pytest.fixture(scope="session", autouse=True)
 def setup_env():
     """Configura variáveis de ambiente para testes."""
-    os.environ["REDIS_HOST"] = "redis"
+    os.environ["REDIS_HOST"] = "localhost"
     os.environ["REDIS_PORT"] = "6379"
     os.environ["CACHE_TTL"] = "3600"
     os.environ["API_KEY"] = "test_key"
@@ -21,7 +21,7 @@ def setup_env():
 @pytest.fixture(scope="session")
 def redis_connection():
     """Fixture para conexão com Redis."""
-    redis_host = os.getenv("REDIS_HOST", "redis")
+    redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", 6379))
     
     redis = Redis(

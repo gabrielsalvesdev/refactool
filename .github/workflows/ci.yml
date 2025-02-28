@@ -22,10 +22,7 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
-          --name redis
-          --network-alias redis
-          --hostname redis
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +49,7 @@ jobs:
         run: |
           echo "Aguardando Redis ficar disponível..."
           for i in {1..30}; do
-            if redis-cli -h redis ping > /dev/null 2>&1; then
+            if redis-cli -h localhost ping > /dev/null 2>&1; then
               echo "Redis está disponível!"
               break
             fi
@@ -66,7 +63,7 @@ jobs:
       
       - name: Run tests
         env:
-          REDIS_HOST: redis
+          REDIS_HOST: localhost
           REDIS_PORT: 6379
         run: |
           mkdir -p test-reports/coverage
