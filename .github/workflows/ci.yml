@@ -537,9 +537,10 @@ jobs:
     needs: [lint, type-check, unit-tests, integration-tests, system-tests, stress-tests, security]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    environment: Para uso
     permissions:
-      contents: read
       id-token: write
+      contents: read
     
     steps:
     - uses: actions/checkout@v4
@@ -585,25 +586,26 @@ jobs:
       
     - name: Publish to TestPyPI
       if: github.ref == 'refs/heads/main'
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        repository-url: https://test.pypi.org/legacy/
-        skip-existing: true
-        verbose: true
-        print-hash: true
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+        TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
+      run: |
+        twine upload --skip-existing --verbose dist/*
       
     - name: Publish to PyPI
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        skip-existing: true
-        verbose: true
-        print-hash: true
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      run: |
+        twine upload --skip-existing --verbose dist/*
 
   docker:
     needs: [lint, type-check, unit-tests, integration-tests, system-tests, stress-tests, security]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    environment: DOCKER_PASS
     env:
       DOCKER_TAG: ${{ github.sha }}
     steps:
@@ -636,7 +638,7 @@ jobs:
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        password: ${{ secrets.DOCKER_TOKEN_ACCESS }}
         
     - name: Build and push
       uses: docker/build-push-action@v5
