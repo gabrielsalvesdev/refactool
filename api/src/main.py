@@ -6,6 +6,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
 import os
+from pathlib import Path
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -22,8 +23,19 @@ async def analyze_code(request: AnalyzeRequest, token: str = Depends(validate_to
     try:
         if not request.path:
             raise HTTPException(status_code=400, detail="Path é obrigatório")
-        # Simulação de análise de código; retorna uma resposta dummy com chave 'issues'
-        return {"issues": []}
+        
+        # Verifica se o caminho existe
+        path = Path(request.path)
+        if not path.exists():
+            raise HTTPException(status_code=400, detail="Caminho inválido ou não existe")
+            
+        # Simulação de análise de código
+        return {
+            "status": "SUCCESS",
+            "issues": []
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         # Log da exceção pode ser adicionado aqui
         raise HTTPException(status_code=500, detail="Erro interno ao processar a análise: " + str(e))

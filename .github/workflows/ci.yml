@@ -25,6 +25,7 @@ jobs:
           --health-retries 10
           --name redis
           --network-alias redis
+          --network host
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +51,7 @@ jobs:
         run: |
           echo "Aguardando Redis ficar disponível..."
           for i in {1..30}; do
-            if redis-cli ping > /dev/null 2>&1; then
+            if redis-cli -h localhost ping > /dev/null 2>&1; then
               echo "Redis está disponível!"
               break
             fi
@@ -60,7 +61,7 @@ jobs:
       
       - name: Run tests
         env:
-          REDIS_HOST: redis
+          REDIS_HOST: localhost
           REDIS_PORT: 6379
         run: |
           mkdir -p test-reports/coverage

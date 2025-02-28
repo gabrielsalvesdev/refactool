@@ -47,6 +47,13 @@ def analyze_code_task(self, path: str) -> Dict:
     Tarefa Celery para análise de código
     """
     try:
+        # Verifica se o caminho existe
+        if not Path(path).exists():
+            return {
+                "status": "ERROR",
+                "error": "Caminho inválido ou não existe"
+            }
+
         # Verifica cache
         hash_val = hashlib.sha256(path.encode()).hexdigest()
         cache_key = f"analysis:{hash_val}"
