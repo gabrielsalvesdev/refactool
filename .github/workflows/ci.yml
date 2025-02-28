@@ -110,22 +110,11 @@ jobs:
           fi
         done
         
-    - name: Check directories
-      shell: bash
-      run: |
-        if [ ! -d "api" ] && [ ! -d "tests" ]; then
-          echo "Nenhum diretório Python encontrado para análise"
-          exit 0
-        fi
-        
     - name: Setup reports directory
       shell: bash
       run: |
         mkdir -p reports/mypy
-        mkdir -p reports/unit
-        mkdir -p reports/integration
-        mkdir -p reports/system
-        mkdir -p reports/stress
+        touch reports/mypy/.gitkeep
         
     - name: Type check
       if: success()
@@ -137,11 +126,9 @@ jobs:
             echo "Relatório de type-check gerado em reports/mypy"
           else
             echo "Nenhum problema de tipagem encontrado"
-            touch reports/mypy/.gitkeep
           fi
         else
           echo "Nenhum diretório Python encontrado para verificação de tipos"
-          touch reports/mypy/.gitkeep
           exit 0
         fi
 
@@ -192,13 +179,11 @@ jobs:
           fi
         done
         
-    - name: Check directories
+    - name: Setup reports directory
       shell: bash
       run: |
-        if [ ! -d "tests" ]; then
-          echo "Diretório de testes não encontrado"
-          exit 0
-        fi
+        mkdir -p reports/unit
+        touch reports/unit/.gitkeep
         
     - name: Run unit tests
       if: success()
@@ -211,7 +196,6 @@ jobs:
           echo "Relatórios gerados em reports/unit"
         else
           echo "Diretório de testes não encontrado"
-          touch reports/unit/.gitkeep
           exit 0
         fi
         
@@ -262,13 +246,11 @@ jobs:
           fi
         done
         
-    - name: Check directories
+    - name: Setup reports directory
       shell: bash
       run: |
-        if [ ! -d "api" ] || [ ! -d "tests" ]; then
-          echo "Diretórios necessários não encontrados"
-          exit 0
-        fi
+        mkdir -p reports/integration
+        touch reports/integration/.gitkeep
         
     - name: Start Celery worker
       if: success()
@@ -292,7 +274,6 @@ jobs:
           echo "Relatórios gerados em reports/integration"
         else
           echo "Diretório de testes não encontrado"
-          touch reports/integration/.gitkeep
           exit 0
         fi
         
@@ -343,13 +324,11 @@ jobs:
           fi
         done
         
-    - name: Check directories
+    - name: Setup reports directory
       shell: bash
       run: |
-        if [ ! -d "api" ] || [ ! -d "tests" ]; then
-          echo "Diretórios necessários não encontrados"
-          exit 0
-        fi
+        mkdir -p reports/system
+        touch reports/system/.gitkeep
         
     - name: Start Celery worker
       if: success()
@@ -373,7 +352,6 @@ jobs:
           echo "Relatórios gerados em reports/system"
         else
           echo "Diretório de testes não encontrado"
-          touch reports/system/.gitkeep
           exit 0
         fi
         
@@ -424,13 +402,11 @@ jobs:
           fi
         done
         
-    - name: Check directories
+    - name: Setup reports directory
       shell: bash
       run: |
-        if [ ! -d "api" ] || [ ! -d "tests" ]; then
-          echo "Diretórios necessários não encontrados"
-          exit 0
-        fi
+        mkdir -p reports/stress
+        touch reports/stress/.gitkeep
         
     - name: Start Celery worker
       if: success()
@@ -454,7 +430,6 @@ jobs:
           echo "Relatórios gerados em reports/stress"
         else
           echo "Diretório de testes não encontrado"
-          touch reports/stress/.gitkeep
           exit 0
         fi
         
