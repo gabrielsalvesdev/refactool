@@ -122,11 +122,11 @@ jobs:
             echo "Relatório de type-check gerado em reports/mypy"
           else
             echo "Nenhum problema de tipagem encontrado"
-            echo "{}" > reports/mypy/empty-report.json
+            echo "{\"message\": \"No type issues found\"}" > reports/mypy/empty-report.json
           fi
         else
           echo "Nenhum diretório Python encontrado para verificação de tipos"
-          echo "{}" > reports/mypy/empty-report.json
+          echo "{\"message\": \"No Python directories found\"}" > reports/mypy/empty-report.json
         fi
 
     - name: Upload type check results
@@ -189,7 +189,7 @@ jobs:
           echo "Relatórios gerados em reports/unit"
         else
           echo "Diretório de testes não encontrado"
-          echo "{}" > reports/unit/empty-report.json
+          echo "{\"message\": \"No tests found\"}" > reports/unit/empty-report.json
         fi
         
     - name: Upload test results
@@ -252,7 +252,7 @@ jobs:
         if [ -d "api" ]; then
           celery -A api.src.tasks worker --loglevel=info --pool=solo & sleep 5 || true
         else
-          echo "Diretório api não encontrado"
+          echo "Diretório api não encontrado - Celery worker não iniciado"
           exit 0
         fi
         
