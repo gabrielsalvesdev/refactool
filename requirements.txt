@@ -29,7 +29,7 @@ opentelemetry-sdk>=1.20.0
 opentelemetry-exporter-prometheus>=0.41b0
 opentelemetry-instrumentation-fastapi>=0.41b0
 prometheus-client>=0.20.0,<0.21.0
-psutil>=5.9.8,<6.0.0
+psutil~=6.1.0  # Ajustado para compatibilidade com safety
 
 # Utilitários
 python-dotenv>=1.0.0
