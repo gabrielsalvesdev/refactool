@@ -28,8 +28,19 @@ PyGithub>=2.1.0
 gitpython>=3.1.0
 python-dotenv>=1.0.0
 anthropic>=0.5.0
+<<<<<<< HEAD
 google-generativeai==0.1.0rc1
 langchain>=0.0.300
 langchain-openai>=0.0.1
 langchain-anthropic>=0.0.1
 langchain-google-genai>=0.0.2 
+=======
+google-ai-generativelanguage>=0.2.0
+langchain>=0.0.300
+langchain-openai>=0.0.1
+langchain-anthropic>=0.0.1
+slowapi
+psutil==5.9.8
+prometheus-client==0.20.0
+pytest-timeout==2.3.1
+>>>>>>> 6c89d56b9badc5c98c50d685d74a832a3916bca7

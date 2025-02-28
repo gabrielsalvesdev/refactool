@@ -107,129 +107,98 @@ class RefactoolAnalyzer:
         await self.ollama_provider.stop()
         await self.github.stop()
     
-    async def analyze_project(self, root_dir: str) -> str:
+    async def analyze_project(self, project_path: str) -> str:
         """
-        Analisa um projeto completo.
-        
-        Args:
-            root_dir: Diretório raiz do projeto
-            
-        Returns:
-            Relatório da análise em formato string
+        Analisa um projeto completo e retorna um relatório
         """
         try:
-            # Inicializa contadores
-            total_files = 0
-            total_lines = 0
-            total_functions = 0
-            total_classes = 0
-            languages = {}
-            important_files = []
+            files = self._scan_project_files(project_path)
+            analysis_results = []
             
-            # Analisa cada arquivo
-            root_path = Path(root_dir)
-            for file_path in root_path.rglob('*'):
-                if not file_path.is_file():
-                    continue
-                    
-                file_ext = file_path.suffix
-                if not file_ext:
-                    continue
-                    
-                # Lê o arquivo
-                try:
-                    content = file_path.read_text(encoding='utf-8')
-                except:
-                    logger.warning(
-                        "refactool_analyzer.file_read_failed",
-                        file=str(file_path)
-                    )
-                    continue
-                
-                # Analisa o arquivo
-                analysis = self.code_analyzer.analyze_file(content, file_ext)
-                
-                # Atualiza contadores
-                total_files += 1
-                total_lines += analysis.total_lines
-                total_functions += analysis.total_functions
-                total_classes += analysis.total_classes
-                
-                # Atualiza linguagens
-                lang = self.code_analyzer.LANGUAGE_EXTENSIONS.get(file_ext, 'Unknown')
-                if lang in languages:
-                    languages[lang] += 1
-                else:
-                    languages[lang] = 1
-                    
-                # Verifica se é um arquivo importante
-                if analysis.total_functions > 0 or analysis.total_classes > 0:
-                    important_files.append({
-                        'path': str(file_path.relative_to(root_path)),
-                        'analysis': analysis
-                    })
+            for file_path in files:
+                result = self._analyze_file(file_path)
+                if result:
+                    analysis_results.append(result)
             
-            # Gera relatório
-            report = self._generate_analysis_report(
-                total_files=total_files,
-                total_lines=total_lines,
-                total_functions=total_functions,
-                total_classes=total_classes,
-                languages=languages,
-                important_files=important_files
-            )
+            return self._generate_analysis_report(analysis_results)
             
-            return report
-            
+        except (FileNotFoundError, PermissionError) as e:
+            logger.error(f"Erro ao acessar arquivos: {str(e)}")
+            return "Erro ao acessar arquivos do projeto"
         except Exception as e:
-            logger.error(
-                "refactool_analyzer.analysis_failed",
-                error=str(e),
-                error_type=type(e).__name__
-            )
+            logger.error(f"Erro inesperado na análise: {str(e)}", exc_info=True)
             return "Erro ao analisar projeto"
     
-    def _generate_analysis_report(
-        self,
-        total_files: int,
-        total_lines: int,
-        total_functions: int,
-        total_classes: int,
-        languages: Dict[str, int],
-        important_files: List[Dict]
-    ) -> str:
-        """Gera o relatório de análise."""
+    def _scan_project_files(self, project_path: str) -> List[str]:
+        """
+        Scan the project directory and return a list of file paths
+        """
+        files = []
+        root_path = Path(project_path)
+        for file_path in root_path.rglob('*'):
+            if not file_path.is_file():
+                continue
+                
+            file_ext = file_path.suffix
+            if not file_ext:
+                continue
+                
+            files.append(str(file_path.relative_to(root_path)))
         
-        # Visão geral do projeto
+        return files
+    
+    def _analyze_file(self, file_path: str) -> Optional[CodeSmell]:
+        """
+        Analyze a single file and return the analysis result
+        """
+        try:
+            content = file_path.read_text(encoding='utf-8')
+            analysis = self.code_analyzer.analyze_file(content, file_path.split('.')[-1])
+            return analysis
+        except Exception as e:
+            logger.warning(
+                "refactool_analyzer.file_read_failed",
+                file=file_path,
+                error=str(e)
+            )
+            return None
+    
+    def _generate_analysis_report(self, analysis_results: List[CodeSmell]) -> str:
+        """
+        Generate a report from the analysis results
+        """
         report = [
             "# Relatório de Análise do Projeto",
             "",
             "## Visão Geral",
-            f"- Total de arquivos: {total_files}",
-            f"- Total de linhas de código: {total_lines}",
-            f"- Total de funções: {total_functions}", 
-            f"- Total de classes: {total_classes}",
+            f"- Total de arquivos: {len(analysis_results)}",
+            f"- Total de linhas de código: {sum(analysis.total_lines for analysis in analysis_results)}",
+            f"- Total de funções: {sum(analysis.total_functions for analysis in analysis_results)}", 
+            f"- Total de classes: {sum(analysis.total_classes for analysis in analysis_results)}",
             "",
             "## Linguagens Utilizadas"
         ]
         
-        # Lista linguagens
+        languages = {}
+        for analysis in analysis_results:
+            lang = self.code_analyzer.LANGUAGE_EXTENSIONS.get(analysis.file_ext, 'Unknown')
+            if lang in languages:
+                languages[lang] += 1
+            else:
+                languages[lang] = 1
+            
         for lang, count in languages.items():
             report.append(f"- {lang}: {count} arquivo(s)")
             
-        # Analisa arquivos importantes
-        if important_files:
+        if analysis_results:
             report.extend([
                 "",
-                "## Arquivos Importantes"
+                "## Análises de Arquivos"
             ])
             
-            for file_info in important_files:
-                path = file_info['path']
-                analysis = file_info['analysis']
-                
+            for analysis in analysis_results:
                 report.extend([
-                    f"\n### {path}",
+                    f"\n### {analysis.file_path}",
                     f"- Linhas totais: {analysis.total_lines}",
                     f"- Linhas em branco: {analysis.metrics.blank_lines}",
                     f"- Linhas de código: {analysis.metrics.code_lines}",
@@ -247,7 +216,7 @@ class RefactoolAnalyzer:
                     report.append("\nClasses:")
                     for cls in analysis.classes:
                         report.append(f"- {cls}")
-                        
+        
         return "\n".join(report)
 
 async def analyze_refactool():

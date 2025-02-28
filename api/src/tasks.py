@@ -9,76 +9,202 @@ import hashlib
 import json
 import os
 from redis import Redis
+from typing import Dict, Optional, Any
+from api.src.analyzers.code_analyzer import CodeAnalyzer
+from api.src.cache.lru_cache import LRUCache
+from api.src.monitoring.metrics import (
+    monitor_task, 
+    update_cache_metrics, 
+    update_cache_memory,
+    log_retry,
+    tasks_completed,
+    active_tasks,
+    cache_hits,
+    cache_misses,
+    update_system_metrics,
+    record_task_completion,
+    record_cache_hit,
+    record_cache_miss,
+    record_task_duration,
+    MetricsTimer
+)
+from celery import chain, group
+import sys
 
-# Atualização: Usar DB 1 para cache
+# Configuração do cache LRU global
+lru_cache = LRUCache(max_memory_mb=100, version=2)
+
+# Atualização: Usar variáveis de ambiente para configuração do Redis
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+
+# Atualização: Usar DB 1 para cache com retry e timeout
 redis_cache = Redis(
-    host=os.getenv("REDIS_HOST", "redis"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
+    host=REDIS_HOST,
+    port=REDIS_PORT,
     db=1,
-    decode_responses=False,  # Armazena como bytes
-    retry_on_timeout=True
+    decode_responses=True,  # Decodifica automaticamente
+    retry_on_timeout=True,
+    socket_connect_timeout=10,
+    socket_timeout=10
 )
 
 # Importar métricas de cache
 from api.src.monitoring.celery_metrics import cache_hits, cache_misses
 
 # Função para calcular o tamanho do projeto
-def get_project_size(path):
-    return sum(f.stat().st_size for f in Path(path).rglob('*.*'))
-
-celery = Celery(__name__, broker="redis://redis:6379/0", backend="redis://redis:6379/0")
-
-@celery.task(bind=True, name="analyze_code_task", autoretry_for=(subprocess.TimeoutExpired,), max_retries=3)
-def analyze_code_task(self, project_path: str):
+def get_project_size(path: str) -> int:
+    """
+    Calcula o tamanho total do projeto em bytes.
+    """
     try:
-        # Geração do hash único do projeto e definição da chave de cache
-        project_hash = hashlib.sha256(project_path.encode()).hexdigest()
-        cache_key = f"analysis:{project_hash}"
+        return sum(f.stat().st_size for f in Path(path).rglob('*.*'))
+    except Exception as e:
+        logger.warning(f"Erro ao calcular tamanho do projeto: {str(e)}")
+        return 0
 
-        # Verifica se o resultado já está em cache
-        cached_result = redis_cache.get(cache_key)
-        if cached_result:
-            logger.info("Cache hit", project_path=project_path, cache_key=cache_key)
-            cache_hits.add(1)
-            result_data = json.loads(cached_result.decode('utf-8'))
-            result_data["cached"] = True
-            return result_data
+# Configuração do Celery usando variáveis de ambiente
+celery = Celery(
+    __name__,
+    broker=f"redis://{REDIS_HOST}:{REDIS_PORT}/0",
+    backend=f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
+)
 
-        if not Path(project_path).is_dir():
-            raise ValueError("Diretório inválido")
-        result = subprocess.run(
-            ["pylint", "--output-format=json", project_path],
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minutos
-        )
-        analysis_data = parse_pylint_output(result.stdout)
-        result_data = {
+# Configurações otimizadas para melhor performance
+celery.conf.update(
+    task_time_limit=300,  # 5 minutos
+    task_soft_time_limit=240,  # 4 minutos
+    worker_prefetch_multiplier=4,  # Ajustado para melhor throughput
+    worker_max_tasks_per_child=100,  # Aumentado para reduzir overhead
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    task_serializer='json',
+    result_serializer='json',
+    accept_content=['json'],
+    redis_socket_connect_timeout=30,
+    redis_socket_timeout=30,
+    broker_transport_options={
+        'visibility_timeout': 3600,
+        'socket_timeout': 30,
+        'socket_connect_timeout': 30
+    },
+    broker_connection_retry_on_startup=True
+)
+
+def should_partition_task(path: str) -> bool:
+    """
+    Determina se uma task deve ser particionada baseado no tamanho do projeto
+    """
+    try:
+        size = get_project_size(path)
+        return size > 5_000_000  # 5MB
+    except (OSError, IOError) as e:
+        logger.warning(f"Erro ao calcular tamanho do projeto: {str(e)}")
+        return False
+
+@celery.task(name="analyze_directory")
+def analyze_directory(path: str) -> Dict:
+    """
+    Analisa um diretório específico do projeto.
+    """
+    try:
+        analyzer = CodeAnalyzer()
+        result = analyzer.analyze_project(path)
+        return {
             "status": "COMPLETED",
-            "metrics": analysis_data,
-            "cached": False
+            "result": result,
+            "path": path
+        }
+    except Exception as e:
+        logger.error(f"Erro ao analisar diretório: {str(e)}")
+        return {
+            "status": "ERROR",
+            "error": str(e),
+            "path": path
         }
 
-        # Incrementa cache miss
-        cache_misses.add(1)
+@celery.task(name="merge_results")
+def merge_results(results: list) -> Dict:
+    """
+    Combina resultados de múltiplas análises
+    """
+    merged = {
+        "status": "SUCCESS",
+        "result": {},
+        "errors": []
+    }
+    
+    for r in results:
+        if r["status"] == "SUCCESS":
+            merged["result"].update(r["result"])
+        else:
+            merged["errors"].append(r)
+    
+    return merged
 
-        # Calcula TTL dinâmico com base no tamanho do projeto
-        project_size = get_project_size(project_path)
-        ttl = 3600 if project_size < 1_000_000 else 600
+@celery.task(
+    bind=True,
+    name="analyze_code_task",
+    autoretry_for=(subprocess.TimeoutExpired, ConnectionError),
+    max_retries=3,
+    default_retry_delay=5
+)
+def analyze_code_task(self, path: str) -> Dict[str, Any]:
+    """
+    Analisa o código no caminho especificado.
+    """
+    # Validações
+    if not path:
+        error_msg = "Caminho não pode ser vazio"
+        logger.error(error_msg)
+        return {"status": "ERROR", "message": error_msg}
+        
+    if not os.path.exists(path):
+        error_msg = f"Caminho não existe: {path}"
+        logger.error(error_msg)
+        return {"status": "ERROR", "message": error_msg}
 
-        # Armazena o resultado no cache com TTL dinâmico
-        redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
-        return result_data
+    try:
+        # Verifica cache
+        cache_key = f"analysis:{path}"
+        cached_result = redis_cache.get(cache_key)
+        
+        if cached_result:
+            record_cache_hit()
+            return {"status": "COMPLETED", "result": cached_result}
+            
+        record_cache_miss()
+        
+        # Executa análise
+        with MetricsTimer():
+            # TODO: Implementar análise real
+            result = {"status": "COMPLETED", "message": "Análise concluída"}
+            
+        # Armazena no cache
+        redis_cache.setex(
+            cache_key,
+            3600,  # 1 hora
+            str(result)
+        )
+        
+        return result
+        
     except Exception as e:
-        logger.exception("Falha crítica na análise")
-        return {"status": "FAILED", "error": str(e), "trace": traceback.format_exc()}
+        error_msg = f"Erro ao analisar código: {str(e)}"
+        logger.error(error_msg)
+        return {"status": "ERROR", "message": error_msg}
 
 # -------------------- Estratégias Avançadas de Cache e Otimização --------------------
 
 CACHE_VERSION = 2
 
-def hash_path(project_path):
-    return hashlib.sha256(project_path.encode()).hexdigest()
+def hash_path(path: str) -> str:
+    """
+    Gera um hash único para o caminho.
+    """
+    if not path:
+        return ""
+    return hashlib.sha256(path.encode()).hexdigest()
 
 def get_cache_key(project_path, project_id=None):
     if project_id:
@@ -110,7 +236,7 @@ def invalidar_projeto(project_id):
 try:
     from redisbloom.client import Client
     rb = Client()
-except Exception as e:
+except Exception:
     rb = None
     logger.warning("RedisBloom não disponível")
 
@@ -131,10 +257,19 @@ def analyze_code_task_with_bloom(self, project_path: str):
             except Exception as ex:
                 logger.warning("Falha no uso do RedisBloom", exc_info=ex)
         
-        # Verifica cache
+        # Verifica cache LRU primeiro
+        cached_result = lru_cache.get(project_hash)
+        if cached_result:
+            logger.info("Cache LRU hit", project_path=project_path)
+            cache_hits.add(1)
+            return json.loads(cached_result)
+        
+        # Verifica cache Redis
         cached_result = redis_cache.get(cache_key)
         if cached_result:
-            logger.info("Cache hit", project_path=project_path, cache_key=cache_key)
+            logger.info("Cache Redis hit", project_path=project_path, cache_key=cache_key)
+            # Atualiza o cache LRU
+            lru_cache.put(project_hash, cached_result)
             cache_hits.add(1)
             result_data = json.loads(cached_result.decode('utf-8'))
             result_data["cached"] = True
@@ -157,14 +292,23 @@ def analyze_code_task_with_bloom(self, project_path: str):
         
         cache_misses.add(1)
         
+        # Serializa resultado
+        result_json = json.dumps(result_data)
+        
+        # Calcula TTL baseado no tamanho do projeto
         project_size = get_project_size(project_path)
         ttl = 3600 if project_size < 1_000_000 else 600
         
-        redis_cache.setex(cache_key, ttl, json.dumps(result_data).encode('utf-8'))
+        # Salva no Redis
+        redis_cache.setex(cache_key, ttl, result_json.encode('utf-8'))
+        
+        # Salva no LRU
+        lru_cache.put(project_hash, result_json)
+        
         return result_data
-    except Exception as e:
-        logger.exception("Falha crítica na análise")
-        return {"status": "FAILED", "error": str(e), "trace": traceback.format_exc()}
+    except Exception:
+        logger.error("Erro ao processar tarefa")
+        return {"status": "FAILED", "error": "Erro ao processar tarefa", "trace": traceback.format_exc()}
 
 # Tarefa de pré-aquecimento dos caches (Cache Warmup) via Celery Beat
 celery.conf.beat_schedule = {

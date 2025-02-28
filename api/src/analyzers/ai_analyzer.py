@@ -44,7 +44,9 @@ class AIAnalyzer:
         await self.config.provider.stop()
     
     async def analyze_code(self, file_path: str, content: str) -> List[CodeSuggestion]:
-        """Analisa código usando IA e retorna sugestões."""
+        """
+        Analisa o código usando IA e retorna sugestões de melhoria
+        """
         try:
             prompt = self._create_analysis_prompt(content)
             response = await self.config.provider.complete(
@@ -53,12 +55,11 @@ class AIAnalyzer:
                 max_tokens=self.config.max_tokens
             )
             return self._parse_analysis_response(file_path, content, response, 1)
+        except (ValueError, KeyError) as e:
+            logger.error(f"Erro de dados na análise AI: {str(e)}")
+            return []
         except Exception as e:
-            logger.error(
-                "ai_analyzer.analysis_error",
-                file=file_path,
-                error=str(e)
-            )
+            logger.error(f"Erro inesperado na análise AI: {str(e)}", exc_info=True)
             return []
     
     def _create_analysis_prompt(self, code: str) -> str:
@@ -124,7 +125,7 @@ Explicação: Nome da função mais descritivo para melhor legibilidade"""
                     try:
                         line_num = int(''.join(filter(str.isdigit, line.split(':')[0])))
                         current_suggestion['line'] = line_num
-                    except:
+                    except (ValueError, IndexError):
                         current_suggestion['line'] = 0
                 
                 elif line.lower().startswith('original:'):

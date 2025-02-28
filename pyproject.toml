@@ -3,7 +3,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
-line-length = 88
+line-length = 120
 target-version = ['py38']
 include = '\.pyi?$'
 
@@ -12,11 +12,18 @@ profile = "black"
 multi_line_output = 3
 
 [tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q"
 testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
-python_classes = "Test*"
-addopts = "--cov=microservices"
+python_files = ["test_*.py"]
+markers = [
+    "unit: testes unitários",
+    "integration: testes de integração",
+    "system: testes de sistema",
+    "stress: testes de stress"
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["microservices"]
