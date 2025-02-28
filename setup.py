@@ -1,68 +1,74 @@
+"""Setup do pacote RefacTool."""
+import os
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+# Lê a versão do arquivo version.py
+about = {}
+here = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(here, "api", "version.py"), encoding="utf-8") as f:
+    exec(f.read(), about)
+
+# Lê o README.md
+with open("README.md", encoding="utf-8") as f:
+    long_description = f.read()
+
+# Dependências do projeto
+install_requires = [
+    "celery>=5.3.0",
+    "redis>=5.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+# Dependências de desenvolvimento
+extras_require = {
+    "dev": [
+        "pytest>=7.0.0",
+        "pytest-asyncio>=0.21.0",
+        "pytest-cov>=4.1.0",
+        "pytest-timeout>=2.1.0",
+        "black>=23.0.0",
+        "flake8>=6.0.0",
+        "mypy>=1.0.0",
+        "bandit>=1.7.0",
+        "safety>=2.3.0",
+        "pip-audit>=2.5.0",
+    ],
+}
 
 setup(
-    name="refactool",
-    version="0.1.0",
-    author="Refactool Team",
-    author_email="contato@refactool.com.br",
-    description="Analisador de código que utiliza múltiplos provedores de IA para fornecer sugestões de melhoria",
+    name=about["__title__"],
+    version=about["__version__"],
+    description=about["__description__"],
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/seu-usuario/refactool-beta",
-    packages=find_packages(include=['api*', 'microservices*']),
-    include_package_data=True,
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
-        "Operating System :: OS Independent",
-    ],
+    author=about["__author__"],
+    license=about["__license__"],
     python_requires=">=3.8",
-    install_requires=[
-        'celery>=5.4.0',
-        'redis>=5.0.0',
-        'psutil>=5.9.8',
-        'prometheus-client>=0.20.0',
-        'pytest>=8.0.0',
-        'pytest-cov>=5.0.0',
-        'pytest-asyncio>=0.24.0',
-        "fastapi>=0.100.0",
-        "uvicorn>=0.22.0",
-        "requests",
-        "click",
-        "pylint",
-        "structlog>=22.1.0",
-        "opentelemetry-api",
-        "opentelemetry-sdk",
-        "opentelemetry-exporter-prometheus",
-        "opentelemetry-instrumentation-fastapi",
-        "bandit",
-        "pandas",
-        "prophet",
-        "xgboost",
-        "httpx",
-        "redisbloom",
-        "aiohttp>=3.8.0",
-        "pydantic>=2.0.0",
-        "pytest-sugar>=0.9.7",
-        "pytest-xdist>=3.3.0",
-        "openai>=1.0.0",
-        "PyGithub>=2.1.0",
-        "gitpython>=3.1.0",
-        "python-dotenv>=1.0.0",
-        "anthropic>=0.5.0",
-        "google-ai-generativelanguage>=0.2.0",
-        "langchain>=0.0.300",
-        "langchain-openai>=0.0.1",
-        "langchain-anthropic>=0.0.1",
-        "slowapi"
-    ],
+    packages=find_packages(exclude=["tests*"]),
+    install_requires=install_requires,
+    extras_require=extras_require,
     entry_points={
         "console_scripts": [
-            "refactool=refactool:main",
+            "refactool=api.cli:main",
         ],
     },
-    py_modules=["refactool"],
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: MIT License",
+        "Natural Language :: Portuguese (Brazilian)",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: Software Development :: Quality Assurance",
+    ],
+    project_urls={
+        "Source": "https://github.com/yourusername/refactool",
+        "Bug Reports": "https://github.com/yourusername/refactool/issues",
+        "Documentation": "https://refactool.readthedocs.io/",
+    },
 ) 

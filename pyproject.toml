@@ -1,40 +1,106 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=45", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "refactool"
+dynamic = ["version"]
+description = "Analisador de código com cache distribuído e alta performance"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "RefacTool Team", email = "contato@refactool.com.br"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[tool.setuptools]
+packages = ["api"]
+
+[tool.setuptools.dynamic]
+version = {attr = "api.version.__version__"}
+
 [tool.black]
-line-length = 120
-target-version = ['py38']
+line-length = 100
+target-version = ["py38"]
 include = '\.pyi?$'
 
 [tool.isort]
 profile = "black"
 multi_line_output = 3
+line_length = 100
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
 
 [tool.pytest.ini_options]
-minversion = "6.0"
-addopts = "-ra -q"
+minversion = "7.0"
+addopts = "-ra -q --cov=api --cov-report=xml --cov-report=html"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
 markers = [
     "unit: testes unitários",
     "integration: testes de integração",
     "system: testes de sistema",
-    "stress: testes de stress"
+    "stress: testes de stress",
 ]
-asyncio_mode = "strict"
-asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
-source = ["microservices"]
-omit = ["tests/*", "**/__init__.py"]
+source = ["api"]
+omit = ["tests/*"]
+branch = true
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
-    "raise NotImplementedError",
     "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
     "pass",
-    "raise ImportError",
-] 
+]
+show_missing = true
+fail_under = 80
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B104"]
+targets = ["api"]
+
+[tool.pylint]
+max-line-length = 100
+disable = ["C0111", "R0903", "C0103"]
+ignore = ["CVS", ".git", ".pytest_cache", "build", "dist"]
+ignore-patterns = ["test_.*?py"]
+python_version = "3.8"
+good-names = ["i", "j", "k", "ex", "Run", "_"]
+
+[tool.safety]
+ignore-vulnerabilities = []
+ignore-cvss-severity-below = 4
+ignore-cvss-unknown-severity = false
+full-report = true
+json = true 

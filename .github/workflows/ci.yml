@@ -2,113 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
+    tags: ['v*']
   pull_request:
     branches: [ main ]
 
 env:
+  PYTHON_VERSION: '3.8'
+  REDIS_MAXMEMORY: 256mb
+  REDIS_MAXMEMORY_POLICY: allkeys-lru
   DOCKER_IMAGE: refactool
-  DOCKER_TAG: ${{ github.sha }}
-  REDIS_HOST: localhost
-  REDIS_PORT: 6379
-  PYTHONPATH: ${{ github.workspace }}
+  DOCKER_REGISTRY: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
-  unit-tests:
-    runs-on: ubuntu-latest
-<<<<<<< HEAD
-=======
-    timeout-minutes: 5
-    
-    services:
-      redis:
-        image: redis:latest
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-timeout pytest-asyncio
-        
-    - name: Start Celery worker
-      run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=solo &
-        sleep 5
-        
-    - name: Run unit tests
-      run: |
-        pytest -v -m "unit" --junitxml=test-reports/unit-tests.xml
-        
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: unit-test-results
-        path: test-reports/unit-tests.xml
-        retention-days: 7
-
-  integration-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    
-    services:
-      redis:
-        image: redis:latest
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-timeout pytest-asyncio
-        
-    - name: Start Celery worker
-      run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=prefork --concurrency=2 &
-        sleep 5
-        
-    - name: Run integration tests
-      run: |
-        pytest -v -m "integration" --junitxml=test-reports/integration-tests.xml
-        
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: integration-test-results
-        path: test-reports/integration-tests.xml
-        retention-days: 7
-
-  system-tests:
+  test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     
@@ -120,272 +27,204 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
-          --health-timeout 10s
-          --health-retries 10
+          --health-timeout 5s
+          --health-retries 5
         env:
-          REDIS_MAXMEMORY: 256mb
-          REDIS_MAXMEMORY_POLICY: allkeys-lru
+          REDIS_MAXMEMORY: ${{ env.REDIS_MAXMEMORY }}
+          REDIS_MAXMEMORY_POLICY: ${{ env.REDIS_MAXMEMORY_POLICY }}
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.8'
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        cache-dependency-path: |
+          requirements.txt
+          requirements-dev.txt
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-timeout pytest-asyncio
+        pip install -r requirements.txt -r requirements-dev.txt
         
     - name: Start Celery worker
       run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=prefork --concurrency=4 &
+        celery -A api.src.tasks worker --loglevel=info --pool=solo &
         sleep 5
         
-    - name: Run system tests
+    - name: Lint with flake8
       run: |
-        pytest -v -m "system" --junitxml=test-reports/system-tests.xml
+        flake8 . --count --show-source --statistics --max-complexity=10
         
-    - name: Upload test results
+    - name: Run tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+        COVERAGE_FILE: .coverage
+      run: |
+        pytest -v tests/ --cov=api --cov-report=xml --cov-report=html --junitxml=test-results.xml
+        
+    - name: Upload coverage report
       uses: actions/upload-artifact@v4
-      if: always()
       with:
-        name: system-test-results
-        path: test-reports/system-tests.xml
-        retention-days: 7
-
-  stress-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    
-    services:
-      redis:
-        image: redis:latest
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 10s
-          --health-retries 10
-        env:
-          REDIS_MAXMEMORY: 512mb
-          REDIS_MAXMEMORY_POLICY: allkeys-lru
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-timeout pytest-asyncio
-        
-    - name: Start Celery worker
-      run: |
-        celery -A api.src.tasks worker --loglevel=info --pool=prefork --concurrency=8 --max-tasks-per-child=100 &
-        sleep 5
-        
-    - name: Run stress tests
-      run: |
-        pytest -v -m "stress" --junitxml=test-reports/stress-tests.xml
-        
-    - name: Upload test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: stress-test-results
-        path: test-reports/stress-tests.xml
+        name: coverage-report
+        path: |
+          coverage.xml
+          htmlcov
+          test-results.xml
         retention-days: 7
 
   quality:
     runs-on: ubuntu-latest
->>>>>>> 6c89d56b9badc5c98c50d685d74a832a3916bca7
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black flake8 mypy types-all
+        
+    - name: Check formatting
+      run: black . --check --diff
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.8'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-<<<<<<< HEAD
-          pip install pytest pytest-cov pylint
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
-      
-      - name: Create directories
-        run: |
-          mkdir -p test-reports/coverage
-      
-      - name: Run tests
-        run: |
-          pytest --cov=microservices --cov-report=xml:coverage.xml --cov-report=html:test-reports/coverage -v tests/
-=======
-          pip install -e .
-          pip install black flake8
-      
-      - name: Format code
-        run: |
-          black .
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git commit -am "style: Format code with Black" || true
-      
-      - name: Run linter
-        run: |
-          flake8 . \
-            --count \
-            --max-line-length=120 \
-            --extend-ignore=E203,W503,E402,F401 \
-            --statistics
+    - name: Lint with flake8
+      run: |
+        flake8 . --count --show-source --statistics --max-complexity=10
+        
+    - name: Type check
+      run: |
+        mypy api tests --ignore-missing-imports
 
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
->>>>>>> 6c89d56b9badc5c98c50d685d74a832a3916bca7
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-<<<<<<< HEAD
-          name: coverage-report
-          path: |
-            coverage.xml
-            test-reports/coverage/
-=======
-          python-version: '3.8'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install bandit
-      
-      - name: Run security scan
-        run: |
-          bandit -r . -f json -o security-report.json -ll -ii -s B101,B104,B105,B108 || true
-      
-      - name: Upload security report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: security-report
-          path: security-report.json
->>>>>>> 6c89d56b9badc5c98c50d685d74a832a3916bca7
-          retention-days: 7
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety pip-audit
+        
+    - name: Run security scans
+      run: |
+        bandit -r . -f json -o security-report.json -ll
+        safety check -r requirements.txt --json > dependencies-report.json
+        pip-audit --requirement requirements.txt --format json > audit-report.json
+        
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: |
+          security-report.json
+          dependencies-report.json
+          audit-report.json
+        retention-days: 7
 
   publish:
-    needs: [unit-tests, integration-tests, system-tests, stress-tests, quality, security]
-    if: github.ref == 'refs/heads/main'
+    needs: [test, quality, security]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+        
+    - name: Build package
+      run: python -m build
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.8'
-      
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine
-      
-<<<<<<< HEAD
-      - name: Run black
-        run: black . --check --diff || true
-=======
-      - name: Build package
-        run: python -m build
-      
-      - name: Publish to Test PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
-        run: |
-          twine upload --repository testpypi dist/*
->>>>>>> 6c89d56b9badc5c98c50d685d74a832a3916bca7
-      
-      - name: Publish to PyPI
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: |
-<<<<<<< HEAD
-          flake8 . \
-            --count \
-            --max-line-length=120 \
-            --extend-ignore=E203,W503,E402,F401,E231 \
-            --statistics
-=======
-          twine upload dist/*
-
-      - name: Discord Notification
-        if: always()
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          title: "Package Published"
-          description: |
-            Version: ${{ github.ref }}
-            Status: ${{ job.status }}
-            Published to: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags') && 'PyPI' || 'Test PyPI' }}
-          ack_no_webhook: true
+    - name: Publish to TestPyPI
+      if: github.ref == 'refs/heads/main'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+      run: |
+        twine check dist/*
+        twine upload --skip-existing --repository testpypi dist/*
+        
+    - name: Publish to PyPI
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+      run: |
+        twine check dist/*
+        twine upload --skip-existing dist/*
 
   docker:
-    needs: [unit-tests, integration-tests, system-tests, stress-tests, quality, security]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    needs: [test, quality, security]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
+    env:
+      DOCKER_TAG: ${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
-
-      - name: Discord Notification
-        if: always()
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          title: "Docker Build"
-          description: |
-            Branch: ${{ github.ref }}
-            Status: ${{ job.status }}
-            Image: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
-          ack_no_webhook: true
->>>>>>> 6c89d56b9badc5c98c50d685d74a832a3916bca7
-
-  # Remover jobs que não estão sendo usados ainda
-  # log_analysis: 
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to DockerHub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:buildcache
+        cache-to: type=registry,ref=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+        
+    - name: Update Docker Hub description
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE }}
+        short-description: Analisador de código com cache distribuído e alta performance
+        readme-filepath: ./README.md
