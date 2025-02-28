@@ -1,10 +1,10 @@
-name: CI Pipeline
+name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 env:
   DOCKER_IMAGE: refactool
@@ -22,26 +22,23 @@ jobs:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
-          --health-start-period 30s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
+          python-version: "3.8"
       
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest pytest-cov pytest-asyncio redis celery
+          pip install -r requirements.txt
+          pip list | grep psutil  # Verificação explícita
       
       - name: Install Redis CLI
         run: |
@@ -66,19 +63,14 @@ jobs:
           echo "Redis está disponível!"
           redis-cli info | grep version
       
-      - name: Start Celery Worker
+      - name: Run Celery
         run: |
-          celery -A microservices.celery_app worker --loglevel=INFO --pool=solo &
-          sleep 5
+          celery -A api.src.tasks.celery worker --loglevel=INFO --pool=solo &
       
       - name: Run tests
-        env:
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           mkdir -p test-reports/coverage
-          pytest --cov=microservices --cov=api --cov-report=xml:test-reports/coverage/coverage.xml --cov-report=html:test-reports/coverage -v tests/
+          pytest --cov=api --cov-report=html:test-reports/coverage --cov-report=xml:test-reports/coverage/coverage.xml
       
       - name: Upload coverage
         uses: actions/upload-artifact@v4

@@ -5,6 +5,14 @@ from typing import Optional, Callable
 import psutil
 import os
 
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    import logging
+    logging.warning("psutil não instalado. Métricas de sistema desativadas.")
+
 # Métricas de execução de tasks
 task_duration = Histogram(
     'task_analysis_duration_seconds',
@@ -115,4 +123,28 @@ def log_retry(task_id: Optional[str] = None) -> None:
     """
     Registra uma tentativa de retry
     """
-    task_retries.inc() 
+    task_retries.inc()
+
+class MetricsCollector:
+    def __init__(self):
+        self._prom_metrics = {}
+        
+    def collect_cpu_usage(self):
+        if PSUTIL_AVAILABLE:
+            return psutil.cpu_percent(interval=1)
+        return 0  # Fallback quando psutil não está disponível
+        
+    def collect_memory_usage(self):
+        if PSUTIL_AVAILABLE:
+            return psutil.virtual_memory().percent
+        return 0  # Fallback quando psutil não está disponível
+
+    def collect_system_metrics(self):
+        if not PSUTIL_AVAILABLE:
+            logging.info("Métricas de sistema desativadas - psutil não disponível")
+            return {}
+            
+        return {
+            'cpu_percent': self.collect_cpu_usage(),
+            'memory_percent': self.collect_memory_usage()
+        } 
