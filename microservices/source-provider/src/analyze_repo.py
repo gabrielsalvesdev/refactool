@@ -13,7 +13,7 @@ import structlog
 from config import DEFAULT_CONFIG
 from analyzers.code_analyzer import CodeAnalyzer
 from analyzers.ai_analyzer import AIAnalyzer, AIAnalysisConfig
-from analyzers.ai_providers import OllamaProvider, OpenAIProvider, DeepSeekProvider
+from analyzers.ai_providers import OllamaProvider, OpenAIProvider, DeepSeekProvider, GeminiProvider
 from analyzers.refactool_analyzer import RefactoolAnalyzer
 from analyzers.github_manager import GitHubManager
 
@@ -33,8 +33,14 @@ def load_config(config_file: str = None) -> dict:
 
 async def setup_ai_provider(config: dict) -> AIAnalyzer:
     """Configura o provedor de IA baseado nas configurações."""
+    # Tenta usar Gemini se a chave estiver disponível
+    if os.getenv("GEMINI_API_KEY"):
+        provider = GeminiProvider(
+            api_key=os.getenv("GEMINI_API_KEY")
+        )
+        logger.info("Usando Gemini como provedor de IA")
     # Tenta usar OpenAI se a chave estiver disponível
-    if os.getenv("OPENAI_API_KEY"):
+    elif os.getenv("OPENAI_API_KEY"):
         provider = OpenAIProvider(
             api_key=os.getenv("OPENAI_API_KEY"),
             api_url=config["openai_url"],
