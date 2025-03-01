@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 import structlog
+from collections import defaultdict
 
 from .code_analyzer import CodeAnalyzer, AnalysisConfig, CodeSmell
 from .ai_analyzer import AIAnalyzer, AIAnalysisConfig, CodeSuggestion
@@ -113,122 +114,121 @@ class RefactoolAnalyzer:
         await self.github.stop()
     
     async def analyze_project(self, project_path: str) -> str:
-        """
-        Analisa um projeto completo e retorna um relatório
-        """
-        try:
-            self.base_path = Path(project_path)
-            files = self._scan_project_files(project_path)
-            analysis_results = []
-            
-            for file_path in files:
-                result = self._analyze_file(file_path)
-                if result:
-                    analysis_results.append(result)
-            
-            return self._generate_analysis_report(analysis_results)
-            
-        except (FileNotFoundError, PermissionError) as e:
-            logger.error(f"Erro ao acessar arquivos: {str(e)}")
-            return "Erro ao acessar arquivos do projeto"
-        except Exception as e:
-            logger.error(f"Erro inesperado na análise: {str(e)}", exc_info=True)
-            return "Erro ao analisar projeto"
-    
-    def _scan_project_files(self, project_path: str) -> List[str]:
-        """
-        Scan the project directory and return a list of file paths
-        """
-        files = []
-        root_path = Path(project_path)
-        for file_path in root_path.rglob('*'):
-            if not file_path.is_file():
-                continue
-                
-            file_ext = file_path.suffix.lower()
-            if not file_ext or file_ext in self.BINARY_EXTENSIONS:
-                continue
-                
-            files.append(str(file_path.relative_to(root_path)))
+        """Analisa um projeto e gera um relatório."""
+        logger.info("Iniciando análise do projeto")
         
-        return files
-    
-    def _analyze_file(self, file_path: str) -> Optional[CodeSmell]:
-        """
-        Analyze a single file and return the analysis result
-        """
-        try:
-            path = self.base_path / file_path
-            content = path.read_text(encoding='utf-8')
-            analysis = self.code_analyzer.analyze_file(content, path.suffix[1:])
-            analysis.file_path = file_path
-            return analysis
-        except Exception as e:
-            logger.warning(
-                "refactool_analyzer.file_read_failed",
-                file=file_path,
-                error=str(e)
-            )
-            return None
-    
-    def _generate_analysis_report(self, analysis_results: List[CodeSmell]) -> str:
-        """
-        Generate a report from the analysis results
-        """
-        report = [
-            "# Relatório de Análise do Projeto",
-            "",
-            "## Visão Geral",
-            f"- Total de arquivos: {len(analysis_results)}",
-            f"- Total de linhas de código: {sum(analysis.total_lines for analysis in analysis_results)}",
-            f"- Total de funções: {sum(analysis.total_functions for analysis in analysis_results)}", 
-            f"- Total de classes: {sum(analysis.total_classes for analysis in analysis_results)}",
-            "",
-            "## Linguagens Utilizadas"
-        ]
+        total_files = 0
+        total_lines = 0
+        total_functions = 0
+        total_classes = 0
+        language_counts = defaultdict(int)
+        file_analyses = []
         
-        languages = {}
-        for analysis in analysis_results:
-            if hasattr(analysis, 'file_path'):
-                ext = Path(analysis.file_path).suffix
-                lang = self.LANGUAGE_EXTENSIONS.get(ext, 'Unknown')
-                if lang in languages:
-                    languages[lang] += 1
-                else:
-                    languages[lang] = 1
-            
-        for lang, count in languages.items():
-            report.append(f"- {lang}: {count} arquivo(s)")
-            
-        if analysis_results:
-            report.extend([
-                "",
-                "## Análises de Arquivos"
-            ])
-            
-            for analysis in analysis_results:
-                if hasattr(analysis, 'file_path'):
-                    report.extend([
-                        f"\n### {analysis.file_path}",
-                        f"- Linhas totais: {analysis.total_lines}",
-                        f"- Linhas em branco: {analysis.metrics.blank_lines}",
-                        f"- Linhas de código: {analysis.metrics.code_lines}",
-                        f"- Tamanho máximo de linha: {analysis.metrics.max_line_length}",
-                        f"- Tamanho médio de linha: {analysis.metrics.avg_line_length:.1f}",
-                        f"- Complexidade: {analysis.metrics.complexity:.1f}"
-                    ])
+        for root, _, files in os.walk(project_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    if not self._should_analyze_file(file_path):
+                        continue
+                        
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
                     
-                    if analysis.functions:
-                        report.append("\nFunções:")
-                        for func in analysis.functions:
-                            report.append(f"- {func}")
-                            
-                    if analysis.classes:
-                        report.append("\nClasses:")
-                        for cls in analysis.classes:
-                            report.append(f"- {cls}")
+                    relative_path = os.path.relpath(file_path, project_path)
+                    file_ext = os.path.splitext(file)[1].lower()
+                    
+                    # Analisa o arquivo
+                    analysis = self.code_analyzer.analyze_file(content, file_ext)
+                    analysis.file_path = relative_path
+                    analysis.language = self.code_analyzer.LANGUAGE_EXTENSIONS.get(file_ext, 'Unknown')
+                    
+                    # Análise do Gemini
+                    ai_suggestions = []
+                    if self.ai_analyzer:
+                        try:
+                            ai_suggestions = await self.ai_analyzer.analyze_code(relative_path, content)
+                        except Exception as e:
+                            logger.error(f"Erro na análise do Gemini para {relative_path}: {e}")
+                    
+                    analysis.total_lines = analysis.code_lines
+                    analysis.blank_lines = analysis.code_lines - analysis.code_lines
+                    analysis.max_line_length = analysis.max_line_length
+                    analysis.avg_line_length = analysis.avg_line_length
+                    analysis.complexity = analysis.complexity
+                    analysis.functions = analysis.functions if isinstance(analysis.functions, list) else []
+                    analysis.classes = analysis.classes if isinstance(analysis.classes, list) else []
+                    analysis.ai_suggestions = [suggestion.to_dict() for suggestion in ai_suggestions] if ai_suggestions else []
+                    
+                    # Adiciona à lista de análises
+                    file_analyses.append(analysis)
+                    total_files += 1
+                    total_lines += analysis.code_lines
+                    total_functions += len(analysis.functions) if isinstance(analysis.functions, list) else analysis.functions or 0
+                    total_classes += len(analysis.classes) if isinstance(analysis.classes, list) else analysis.classes or 0
+                    language_counts[analysis.language or 'Unknown'] += 1
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao analisar {file_path}: {e}")
+                    continue
         
-        return "\n".join(report)
+        # Gera o relatório em formato markdown
+        report = "# Relatório de Análise do Projeto\n\n"
+        
+        # Visão Geral
+        report += "## Visão Geral\n"
+        report += f"- Total de arquivos: {total_files}\n"
+        report += f"- Total de linhas de código: {total_lines}\n"
+        report += f"- Total de funções: {total_functions}\n"
+        report += f"- Total de classes: {total_classes}\n\n"
+        
+        # Linguagens
+        report += "## Linguagens Utilizadas\n"
+        for lang, count in language_counts.items():
+            report += f"- {lang}: {count} arquivo(s)\n"
+        report += "\n"
+        
+        # Análises detalhadas
+        report += "## Análises de Arquivos\n\n"
+        for analysis in file_analyses:
+            report += f"### {analysis.file_path}\n"
+            report += f"- Linhas totais: {analysis.total_lines}\n"
+            report += f"- Linhas em branco: {analysis.blank_lines}\n"
+            report += f"- Linhas de código: {analysis.code_lines}\n"
+            report += f"- Tamanho máximo de linha: {analysis.max_line_length}\n"
+            report += f"- Tamanho médio de linha: {analysis.avg_line_length:.1f}\n"
+            report += f"- Complexidade: {analysis.complexity:.1f}\n"
+            
+            # Adiciona as sugestões do Gemini
+            if analysis.ai_suggestions:
+                report += "\n#### Sugestões de Melhoria\n"
+                for suggestion in analysis.ai_suggestions:
+                    report += f"- Linha {suggestion['line']}: {suggestion['explanation']}\n"
+                    report += f"  Original: {suggestion['original_code']}\n"
+                    report += f"  Sugestão: {suggestion['suggested_code']}\n"
+            report += "\n"
+        
+        return report
+
+    def _should_analyze_file(self, file_path: str) -> bool:
+        """Verifica se um arquivo deve ser analisado."""
+        # Ignora arquivos binários conhecidos
+        file_ext = os.path.splitext(file_path)[1].lower()
+        if file_ext in {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.exe', '.dll',
+                       '.so', '.dylib', '.pyc', '.pyo', '.deb'}:
+            return False
+            
+        # Ignora arquivos do git
+        if os.path.sep + '.git' + os.path.sep in file_path:
+            return False
+            
+        # Ignora arquivos muito grandes (mais de 5MB)
+        try:
+            if os.path.getsize(file_path) > 5 * 1024 * 1024:
+                return False
+        except OSError:
+            return False
+            
+        return True
 
 async def analyze_refactool():
     """Função principal para análise da Refactool."""

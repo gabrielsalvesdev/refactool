@@ -2,7 +2,7 @@
 Analisador estático de código.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 import ast
@@ -56,21 +56,18 @@ class CodeMetrics:
 
 @dataclass
 class CodeAnalysis:
-    """Resultado da análise de código."""
+    """Representa a análise de um arquivo de código."""
+    file_path: str = ""
+    language: Optional[str] = None
     total_lines: int = 0
-    total_functions: int = 0
-    total_classes: int = 0
-    functions: List[str] = None
-    classes: List[str] = None
-    metrics: CodeMetrics = None
-    
-    def __post_init__(self):
-        if self.functions is None:
-            self.functions = []
-        if self.classes is None:
-            self.classes = []
-        if self.metrics is None:
-            self.metrics = CodeMetrics()
+    code_lines: int = 0
+    blank_lines: int = 0
+    max_line_length: int = 0
+    avg_line_length: float = 0.0
+    complexity: float = 0.0
+    functions: list = field(default_factory=list)
+    classes: list = field(default_factory=list)
+    metrics: CodeMetrics = field(default_factory=CodeMetrics)
 
 class CodeAnalyzer:
     """Analisador estático de código."""
@@ -118,15 +115,22 @@ class CodeAnalyzer:
             result.metrics.blank_lines = sum(1 for line in lines if not line.strip())
             result.metrics.code_lines = sum(1 for line in lines if line.strip())
             
+            # Copia valores do CodeMetrics para CodeAnalysis
+            result.blank_lines = result.metrics.blank_lines
+            result.code_lines = result.metrics.code_lines
+            
             # Análise de tamanho de linhas
             line_lengths = [len(line) for line in lines if line.strip()]
             if line_lengths:
                 result.metrics.max_line_length = max(line_lengths)
                 result.metrics.avg_line_length = sum(line_lengths) / len(line_lengths)
+                result.max_line_length = result.metrics.max_line_length
+                result.avg_line_length = result.metrics.avg_line_length
             
             # Análise específica por linguagem
             if file_ext == '.py':
                 self._analyze_python(content, result)
+                result.complexity = result.metrics.complexity
             
             return result
             

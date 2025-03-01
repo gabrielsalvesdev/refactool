@@ -1,0 +1,1 @@
+import urllib.request, zipfile, io; urllib.request.urlretrieve('https://github.com/gabrielsalvesdev/captool/archive/main.zip', 'temp/repo.zip'); z = zipfile.ZipFile('temp/repo.zip'); z.extractall('temp/gabrielsalvesdev_captool'); z.close()  

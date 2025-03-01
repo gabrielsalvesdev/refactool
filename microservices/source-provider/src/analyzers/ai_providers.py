@@ -195,52 +195,55 @@ class GeminiProvider(AIProvider):
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        api_url: str = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent",
+        api_key: str,
+        api_url: str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
         model: str = "gemini-2.0-flash"
     ):
         super().__init__(api_key)
-        self.api_url = api_url
+        self.api_url = f"{api_url}?key={api_key}"
         self.model = model
-    
-    async def complete(self, prompt: str, **kwargs) -> str:
+        
+    async def complete(
+        self,
+        prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1024
+    ) -> str:
         """Gera uma completação usando Gemini."""
-        if not self._session:
-            await self.start()
-            
-        headers = {
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "contents": [{
-                "parts": [{
-                    "text": prompt
-                }]
-            }],
-            "generationConfig": {
-                "temperature": kwargs.get("temperature", 0.7),
-                "topP": kwargs.get("top_p", 0.95),
-                "maxOutputTokens": kwargs.get("max_tokens", 1000)
-            }
-        }
-        
         try:
-            url = f"{self.api_url}?key={self.api_key}"
-            async with self._session.post(
-                url,
-                headers=headers,
-                json=data,
-                timeout=kwargs.get("timeout", 30)
-            ) as response:
-                response.raise_for_status()
-                result = await response.json()
-                return result["candidates"][0]["content"]["parts"][0]["text"]
+            async with aiohttp.ClientSession() as session:
+                headers = {
+                    "Content-Type": "application/json"
+                }
                 
+                data = {
+                    "contents": [{
+                        "parts": [{
+                            "text": prompt
+                        }]
+                    }],
+                    "generationConfig": {
+                        "temperature": temperature,
+                        "maxOutputTokens": max_tokens,
+                        "topP": 0.8,
+                        "topK": 40
+                    }
+                }
+                
+                async with session.post(self.api_url, headers=headers, json=data) as response:
+                    if response.status != 200:
+                        raise Exception(f"Erro na API do Gemini: {response.status}")
+                        
+                    result = await response.json()
+                    
+                    if "error" in result:
+                        raise Exception(f"Erro na API do Gemini: {result['error']}")
+                        
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                    
         except Exception as e:
             logger.error(
                 "gemini_provider.completion_failed",
-                error=str(e),
-                error_type=type(e).__name__
+                error=str(e)
             )
             raise 

@@ -16,6 +16,8 @@ from analyzers.ai_analyzer import AIAnalyzer, AIAnalysisConfig
 from analyzers.ai_providers import OllamaProvider, OpenAIProvider, DeepSeekProvider, GeminiProvider
 from analyzers.refactool_analyzer import RefactoolAnalyzer
 from analyzers.github_manager import GitHubManager
+import git
+import logging
 
 logger = structlog.get_logger()
 
@@ -64,7 +66,12 @@ async def setup_ai_provider(config: dict) -> AIAnalyzer:
         )
         logger.info("Usando Ollama como provedor de IA")
     
-    return AIAnalyzer(provider)
+    return AIAnalyzer(AIAnalysisConfig(
+        provider=provider,
+        temperature=config.get("temperature", 0.3),
+        max_tokens=config.get("max_tokens", 1000),
+        chunk_size=config.get("chunk_size", 1000)
+    ))
 
 async def analyze_repository(
     repo_url: str,
@@ -153,32 +160,88 @@ async def analyze_repository(
             except Exception as e:
                 logger.error(f"Erro ao limpar diretório temporário: {str(e)}")
 
-def main():
+async def main():
     """Função principal."""
-    parser = argparse.ArgumentParser(description="Analisador de repositórios")
-    parser.add_argument("repo_url", help="URL do repositório GitHub")
-    parser.add_argument("-o", "--output", help="Arquivo para salvar o relatório")
-    parser.add_argument("-c", "--config", help="Arquivo de configuração")
+    parser = argparse.ArgumentParser(description='Analisa um repositório do GitHub.')
+    parser.add_argument('url', help='URL do repositório')
+    parser.add_argument('-o', '--output', help='Arquivo de saída')
     args = parser.parse_args()
     
-    # Configura o Git se necessário
-    git_path = os.getenv("GIT_PYTHON_GIT_EXECUTABLE")
-    if not git_path:
-        git_path = r"C:\Program Files\Git\bin\git.exe"
-        os.environ["GIT_PYTHON_GIT_EXECUTABLE"] = git_path
+    # Configura o logger
+    logging.basicConfig(level=logging.INFO)
     
-    # Executa análise
+    # Clona o repositório
+    target_dir = os.path.join('temp', 'captool')
     try:
-        result = asyncio.run(analyze_repository(
-            args.repo_url,
-            args.output,
-            args.config
-        ))
-        print("\n" + result + "\n")
-    except KeyboardInterrupt:
-        print("\nAnálise interrompida pelo usuário.")
+        if os.path.exists(target_dir):
+            # Tenta remover o diretório, ignorando erros
+            for root, dirs, files in os.walk(target_dir, topdown=False):
+                for name in files:
+                    try:
+                        os.chmod(os.path.join(root, name), 0o777)
+                        os.unlink(os.path.join(root, name))
+                    except:
+                        pass
+                for name in dirs:
+                    try:
+                        os.chmod(os.path.join(root, name), 0o777)
+                        os.rmdir(os.path.join(root, name))
+                    except:
+                        pass
+            try:
+                os.rmdir(target_dir)
+            except:
+                pass
+        
+        os.makedirs(target_dir, exist_ok=True)
+        
+        repo = git.Repo.clone_from(args.url, target_dir)
+        logger.info('Repositório clonado com sucesso', target_dir=target_dir, url=args.url)
+        
+        # Configura os analisadores
+        config = load_config()
+        ai_analyzer = await setup_ai_provider(config)
+        code_analyzer = CodeAnalyzer()
+        
+        # Cria o analisador principal
+        analyzer = RefactoolAnalyzer(code_analyzer, ai_analyzer)
+        
+        # Analisa o projeto
+        report = await analyzer.analyze_project(target_dir)
+        
+        # Salva o relatório
+        if args.output:
+            with open(args.output, 'w', encoding='utf-8') as f:
+                f.write(report)
+        else:
+            print(report)
+            
     except Exception as e:
-        print(f"\nErro fatal: {str(e)}\n")
+        logger.error(f"Erro durante a análise: {str(e)}")
+        raise
+    finally:
+        # Tenta limpar o diretório temporário
+        try:
+            if os.path.exists(target_dir):
+                for root, dirs, files in os.walk(target_dir, topdown=False):
+                    for name in files:
+                        try:
+                            os.chmod(os.path.join(root, name), 0o777)
+                            os.unlink(os.path.join(root, name))
+                        except:
+                            pass
+                    for name in dirs:
+                        try:
+                            os.chmod(os.path.join(root, name), 0o777)
+                            os.rmdir(os.path.join(root, name))
+                        except:
+                            pass
+                try:
+                    os.rmdir(target_dir)
+                except:
+                    pass
+        except:
+            pass
 
-if __name__ == "__main__":
-    main() 
+if __name__ == '__main__':
+    asyncio.run(main()) 

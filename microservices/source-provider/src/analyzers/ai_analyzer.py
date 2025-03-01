@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 import structlog
 
-from .ai_providers import AIProvider, OpenAIProvider, OllamaProvider
+from .ai_providers import AIProvider, OpenAIProvider, OllamaProvider, GeminiProvider
 
 logger = structlog.get_logger()
 
 @dataclass
 class AIAnalysisConfig:
     """Configuração para análise com IA."""
-    provider: Union[OpenAIProvider, OllamaProvider]
+    provider: Union[OpenAIProvider, OllamaProvider, GeminiProvider]
     temperature: float = 0.3
     max_tokens: int = 1000
     chunk_size: int = 1000
@@ -28,6 +28,17 @@ class CodeSuggestion:
     suggested_code: str
     explanation: str
     confidence: float
+    
+    def to_dict(self) -> dict:
+        """Converte a sugestão em um dicionário."""
+        return {
+            "file": self.file,
+            "line": self.line,
+            "original_code": self.original_code,
+            "suggested_code": self.suggested_code,
+            "explanation": self.explanation,
+            "confidence": self.confidence
+        }
 
 class AIAnalyzer:
     """Analisador baseado em IA que fornece sugestões inteligentes."""
