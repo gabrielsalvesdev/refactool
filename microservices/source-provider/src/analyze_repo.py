@@ -169,7 +169,9 @@ async def main():
     parser = argparse.ArgumentParser(description='Analisa um repositório do GitHub.')
     parser.add_argument('url', help='URL do repositório')
     parser.add_argument('-o', '--output', help='Arquivo de saída')
-    parser.add_argument('--provider', choices=['gemini', 'openai', 'deepseek', 'ollama'], help='Provedor de IA a ser usado')
+    parser.add_argument('--provider', choices=['gemini', 'openai', 'deepseek', 'ollama'], 
+                       help='Provedor de IA a ser usado (gemini, openai, deepseek, ollama)')
+    parser.add_argument('--config', help='Arquivo de configuração opcional')
     args = parser.parse_args()
     
     # Configura o logger
@@ -204,7 +206,7 @@ async def main():
         logger.info('Repositório clonado com sucesso', target_dir=target_dir, url=args.url)
         
         # Configura os analisadores
-        config = load_config()
+        config = load_config(args.config)
         ai_analyzer = await setup_ai_provider(config, args.provider)
         code_analyzer = CodeAnalyzer()
         

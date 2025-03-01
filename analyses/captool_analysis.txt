@@ -29,24 +29,36 @@
 - Complexidade: 2.0
 
 #### Sugestões de Melhoria
-- Linha 27: Usar `subprocess.run` é mais seguro e flexível que `os.system`. Permite capturar a saída do comando, verificar se houve erros e trabalhar com strings diretamente. O `shell=True` é necessário porque você está executando um comando diretamente, mas tenha cuidado com isso em ambientes de produção, pois pode introduzir vulnerabilidades se o `captool_command` vier de uma fonte não confiável.  `check=True` levanta uma exceção se o comando retornar um código de erro diferente de zero, o que ajuda a identificar falhas. `capture_output=True` captura a saída padrão e de erro, e `text=True` garante que a saída seja tratada como texto.
+- Linha 17: Um nome de arquivo mais descritivo ajuda a entender o propósito do arquivo.
+  Original: capture_file = "capture.cap"
+  Sugestão: capture_file = "handshake_capture.cap"
+- Linha 23: Sem alterações.
+  Original: if not is_monitor_mode():
+  Sugestão: if not is_monitor_mode():
+- Linha 24: Adiciona uma sugestão para o usuário sobre como resolver o problema.
+  Original: logger.warning("A placa Wi-Fi não está no modo de monitoramento. A captura de handshake pode não ser possível.")
+  Sugestão: logger.warning("A placa Wi-Fi não está no modo de monitoramento. A captura de handshake pode falhar. Considere ativar o modo monitor antes de executar o teste.")
+- Linha 27: Adiciona um comentário TODO para lembrar de substituir o comando genérico por um comando real com os parâmetros necessários para o `captool`. Isso é crucial para que o teste funcione corretamente.
+  Original: captool_command = "captool"
+  Sugestão: captool_command = "captool" # TODO: Substituir por comando real com parâmetros adequados
+- Linha 28: Substitui `os.system` por `subprocess.run` para um melhor tratamento de erros e segurança.  `subprocess.run` permite capturar a saída do comando e verificar se ele foi executado com sucesso.  O `try...except` garante que o teste falhe se o comando `captool` retornar um código de erro.  `shell=True` é usado aqui, mas deve ser usado com cautela e apenas se necessário, pois pode apresentar riscos de segurança se o `captool_command` for construído a partir de entrada do usuário.  `check=True` levanta uma exceção se o comando retornar um código de erro diferente de zero. `capture_output=True` captura a saída padrão e de erro. `text=True` decodifica a saída como texto.
   Original: os.system(captool_command)
-  Sugestão: subprocess.run(captool_command, shell=True, capture_output=True, text=True, check=True)
-- Linha 29: Adicionar logs da saída padrão e de erro do `captool` em nível de debug ajuda a diagnosticar problemas quando o teste falha.  É importante usar `logger.debug` porque essa informação geralmente não é necessária em execuções normais.  Você precisará armazenar o resultado de `subprocess.run` em uma variável (ex: `result = subprocess.run(...)`) para acessar `result.stdout` e `result.stderr`.
-  Original: logger.info(f"Comando do captool executado: {captool_command}")
-  Sugestão: logger.info(f"Comando do captool executado: {captool_command}")
-- Linha 45: Adicionar uma mensagem de erro customizada ao `assertIn` torna mais fácil entender o motivo da falha do teste.
+  Sugestão: try:
+- Linha 34: Sem alterações.
+  Original: with open(capture_file, "rb") as file:
+  Sugestão: with open(capture_file, "rb") as file:
+- Linha 40: Adiciona uma mensagem de erro mais informativa ao `assertIn` para facilitar a depuração em caso de falha.
   Original: self.assertIn(b"EAPOL", capture_data)  # Verificar a presença de pacotes EAPOL
-  Sugestão: self.assertIn(b"EAPOL", capture_data, "Pacotes EAPOL não encontrados no arquivo de captura.")  # Verificar a presença de pacotes EAPOL
-- Linha 46: Similarmente, uma mensagem de erro customizada para `assertGreater` melhora a legibilidade do resultado do teste.
+  Sugestão: self.assertIn(b"EAPOL", capture_data, "Pacotes EAPOL não encontrados no arquivo de captura. Handshake pode não ter sido capturado.")  # Verificar a presença de pacotes EAPOL
+- Linha 41: Adiciona uma mensagem de erro mais informativa ao `assertGreater` para facilitar a depuração em caso de falha.
   Original: self.assertGreater(len(capture_data), 100)  # Verificar se a captura tem tamanho mínimo
-  Sugestão: self.assertGreater(len(capture_data), 100, "O arquivo de captura é muito pequeno.")  # Verificar se a captura tem tamanho mínimo
-- Linha 52: Adicionar um bloco `try...except` para lidar com possíveis erros ao remover o arquivo. Isso evita que o teste falhe completamente se o arquivo não puder ser removido (por exemplo, se não tiver permissão). É importante registrar o erro com `logger.error` para que o problema seja notado.
+  Sugestão: self.assertGreater(len(capture_data), 100, "O arquivo de captura é muito pequeno. Handshake pode não ter sido capturado corretamente.")  # Verificar se a captura tem tamanho mínimo
+- Linha 48: Adiciona um bloco `try...except` para lidar com possíveis erros ao remover o arquivo, como permissões insuficientes.
   Original: os.remove(capture_file)
   Sugestão: try:
-- Linha 60: Em vez de retornar `False` por padrão, lançar uma exceção `NotImplementedError` indica claramente que essa função precisa ser implementada antes que o teste possa funcionar corretamente. Isso evita falsos positivos e garante que o desenvolvedor saiba que precisa adicionar a lógica de verificação.
+- Linha 55: Adiciona um comentário TODO para lembrar de implementar a lógica real para verificar o modo de monitor
   Original: return False
-  Sugestão: # Implemente aqui a lógica para verificar o modo da placa Wi-Fi
+  Sugestão: # TODO: Implementar a lógica para verificar o modo de monitoramento da placa Wi-Fi
 
 ### test_captool.py
 - Linhas totais: 45
@@ -57,44 +69,47 @@
 - Complexidade: 1.0
 
 #### Sugestões de Melhoria
-- Linha 1: Sem alterações. `subprocess` é necessário para executar comandos externos.
+- Linha 1: Sem alterações. Este módulo é essencial para executar comandos externos.
   Original: `import subprocess`
   Sugestão: `import subprocess`
-- Linha 2: Sem alterações. `unittest` é o framework de testes padrão do Python.
+- Linha 2: Sem alterações. Necessário para a estrutura de testes unitários.
   Original: `import unittest`
   Sugestão: `import unittest`
-- Linha 3: Sem alterações. `patch` é usado para simular o comportamento de funções.
+- Linha 3: Sem alterações. `patch` é fundamental para simular o comportamento de `subprocess.run` em testes.
   Original: `from unittest.mock import patch`
   Sugestão: `from unittest.mock import patch`
-- Linha 4: Sem alterações. `logging` é essencial para rastrear a execução e depurar.
+- Linha 4: Sem alterações. Essencial para registrar informações sobre a execução do teste.
   Original: `import logging`
   Sugestão: `import logging`
-- Linha 5: Sem alterações. `os` é usado para interagir com o sistema operacional, como verificar a existência de arquivos.
+- Linha 5: Sem alterações. Necessário para interagir com o sistema de arquivos (criar/remover arquivos).
   Original: `import os`
   Sugestão: `import os`
-- Linha 8: Adicionar `%(module)s` e `%(funcName)s` ao formato do log ajuda a identificar mais facilmente a origem das mensagens de log, especialmente em projetos maiores.
+- Linha 8: Adicionar `%(module)s` e `%(funcName)s` ao formato do log torna mais fácil identificar a origem das mensagens de log, especialmente em projetos maiores.
   Original: `logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')`
   Sugestão: `logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(module)s - %(funcName)s - %(message)s')`
-- Linha 14: Usar um nome de arquivo mais específico para testes ajuda a evitar conflitos com arquivos de captura reais e deixa mais claro que este arquivo é para uso exclusivo dos testes.
+- Linha 12: Sem alterações. Nome da classe de teste apropriado.
+  Original: `class TestCaptool(unittest.TestCase):`
+  Sugestão: `class TestCaptool(unittest.TestCase):`
+- Linha 13: Sem alterações. Nome da função de teste apropriado.
+  Original: `def test_capture_handshake(self):`
+  Sugestão: `def test_capture_handshake(self):`
+- Linha 16: Tornar o nome do arquivo de captura uma constante (em maiúsculas) melhora a legibilidade e indica que este valor não deve ser alterado durante a execução do teste.
   Original: `capture_file = "capture.cap"`
-  Sugestão: `capture_file = "test_capture.cap"`
-- Linha 16: Simplificação da mensagem para melhor legibilidade.
+  Sugestão: `CAPTURE_FILE = "capture.cap"`
+- Linha 18: Usar a constante `CAPTURE_FILE` para consistência.
   Original: `logger.info(f"Iniciando o teste de captura de handshake com o arquivo de captura {capture_file}")`
-  Sugestão: `logger.info(f"Iniciando o teste de captura de handshake com o arquivo: {capture_file}")`
-- Linha 22: Definir `args`, `stdout` e `stderr` no `CompletedProcess` torna o mock mais realista e pode ajudar a evitar erros inesperados se o código testado depender desses atributos.  O `args` deve corresponder ao comando que está sendo simulado.
+  Sugestão: `logger.info(f"Iniciando o teste de captura de handshake com o arquivo de captura {CAPTURE_FILE}")`
+- Linha 24: Melhorar a simulação do `CompletedProcess` para incluir informações mais realistas.  Especificar `args`, `stdout` e `stderr` torna o mock mais completo e pode ajudar a detectar problemas sutis.
   Original: `mock_run.return_value = subprocess.CompletedProcess([], 0)`
   Sugestão: `mock_run.return_value = subprocess.CompletedProcess(args=["captool"], returncode=0, stdout=b"", stderr=b"")`
-- Linha 25: Passar o comando como uma lista para `subprocess.run` evita problemas de segurança relacionados à injeção de shell, especialmente se o comando contiver variáveis.  Embora aqui seja uma string fixa, é uma boa prática.
+- Linha 27: É recomendado passar o comando como uma lista para `subprocess.run` quando `shell=False` (que é o padrão e mais seguro).  Embora `shell=True` esteja sendo usado aqui, mudar para uma lista é uma boa prática para o futuro, caso você decida remover `shell=True`.
   Original: `captool_command = "captool"`
   Sugestão: `captool_command = ["captool"]`
-- Linha 26: 1. Remover `shell=True` para evitar vulnerabilidades de segurança. 2. Adicionar `check=False` para evitar que o teste falhe se o `returncode` for diferente de zero (isso permite que você verifique o `returncode` explicitamente).
+- Linha 28: Adicionar `check=False` impede que `subprocess.run` lance uma exceção `CalledProcessError` se o comando retornar um código de saída diferente de zero. Isso permite que você trate o código de saída no seu teste.  Se você espera que o comando possa falhar, é importante capturar e verificar o código de saída.
   Original: `result = subprocess.run(captool_command, shell=True, capture_output=True, text=True)`
-  Sugestão: `result = subprocess.run(captool_command, capture_output=True, text=True, check=False)`
-- Linha 31: Remover `shell=True` para corresponder à alteração feita na linha 26.
-  Original: `mock_run.assert_called_once_with(captool_command, shell=True, capture_output=True, text=True)`
-  Sugestão: `mock_run.assert_called_once_with(captool_command, capture_output=True, text=True, check=False)`
-- Linha 34: 
-  Original: `self.assertTrue(os.path.exists(capture_file), f"O arquivo de captura {capture_
+  Sugestão: `result = subprocess.run(captool_command, shell=True, capture_output=True, text=True, check=False)`
+- Linha 31: 
+  Original: 
   Sugestão: 
 
 ### CapTool\requeriments.sh
@@ -106,9 +121,9 @@
 - Complexidade: 0.0
 
 #### Sugestões de Melhoria
-- Linha 0: Um script bem comentado e organizado é mais fácil de entender e manter.  Por exemplo:
-  Original: (Script linear)
-  Sugestão: Adicionar comentários mais detalhados e organizar o script em seções.
+- Linha 0: Mais preciso.
+  Original: `echo "Instalação das dependências concluída com sucesso!"`
+  Sugestão: `echo "Instalação das dependências concluída com sucesso!"`
 
 ### CapTool\captool\DEBIAN\captool.desktop
 - Linhas totais: 9
@@ -119,24 +134,27 @@
 - Complexidade: 0.0
 
 #### Sugestões de Melhoria
-- Linha 3: Adicionar uma descrição breve no nome torna mais fácil identificar a ferramenta em menus e launchers.
+- Linha 3: Adicionar uma breve descrição no nome torna mais fácil identificar a ferramenta em menus e launchers.
   Original: Name=CapTool
-  Sugestão: Name=CapTool - Captura de Rede Wi-Fi
-- Linha 4: A sugestão é mais concisa e abrange um escopo maior (captura e análise).  "captool" já está no nome, então não precisa repetir.
+  Sugestão: Name=CapTool (Captura de Rede Wi-Fi)
+- Linha 4: A descrição é um pouco redundante com o nome. Reformulei para ser mais concisa e informativa.
   Original: Comment=Ferramenta captool para captura de rede Wi-Fi
-  Sugestão: Comment=Captura e análise de tráfego de rede Wi-Fi.
-- Linha 5: Especificar o interpretador `python3` garante que o script seja executado com a versão correta do Python, especialmente em sistemas com múltiplas versões instaladas.  Isso evita problemas de compatibilidade.
+  Sugestão: Comment=Interface gráfica para captura de pacotes de rede Wi-Fi.
+- Linha 5: Especificar o interpretador Python (python3) garante que o script seja executado com a versão correta do Python, evitando problemas de compatibilidade.  É uma boa prática, especialmente em sistemas onde python2 e python3 coexistem.
   Original: Exec=/usr/bin/wifi_capture_gui.py
   Sugestão: Exec=python3 /usr/bin/wifi_capture_gui.py
-- Linha 6: É uma boa prática seguir a estrutura de diretórios do Icon Theme Specification.  Colocar o ícone dentro de `hicolor/scalable/apps` permite que o sistema encontre o ícone mais facilmente e o dimensione corretamente para diferentes resoluções. Se o ícone existir em vários tamanhos, você pode colocar em diretórios específicos como `hicolor/256x256/apps/captool-icon.png`.  Se o ícone for vetorial (SVG), `scalable` é o ideal.
+- Linha 6: Para melhor compatibilidade com diferentes temas e tamanhos de ícones, é recomendado usar o diretório `hicolor` e especificar o tamanho do ícone. Se o ícone existir em diferentes tamanhos (16x16, 32x32, etc.), eles devem estar organizados dentro do diretório `hicolor`.  Se o ícone for vetorial (SVG), o diretório `scalable` é o mais adequado.  Se você não tiver certeza, mantenha o original, mas considere criar versões do ícone em diferentes tamanhos e colocá-las no diretório `hicolor`.
   Original: Icon=/usr/share/icons/captool-icon.png
   Sugestão: Icon=/usr/share/icons/hicolor/scalable/apps/captool-icon.png
-- Linha 8: Sem alterações.  Está correto.
+- Linha 8: Sem alterações. Correto.
   Original: Type=Application
   Sugestão: Type=Application
-- Linha 9: `StartupNotify=true` permite que o ambiente de desktop mostre um feedback visual (por exemplo, um ícone pulando na dock) enquanto a aplicação está sendo iniciada. Isso é especialmente útil se a aplicação demora um pouco para abrir.
+- Linha 9: Adicionar a categoria "Security" (Segurança) é apropriado, pois a ferramenta está relacionada à captura de pacotes de rede, que é uma atividade comum em segurança de redes.
   Original: Categories=Network;
   Sugestão: Categories=Network;Security;
+- Linha 10: Adicionar `StartupNotify=false` desativa a notificação de inicialização do aplicativo. Isso pode ser útil se o aplicativo iniciar rapidamente e a notificação for desnecessária. Se o aplicativo demorar para iniciar, `StartupNotify=true` (ou omitir a linha, pois o padrão é `true`) pode ser mais apropriado.
+  Original: (linha vazia)
+  Sugestão: StartupNotify=false
 
 ### CapTool\captool\DEBIAN\control
 - Linhas totais: 9
@@ -150,30 +168,30 @@
 - Linha 1: Sem alterações. O nome do pacote parece adequado.
   Original: Package: captool
   Sugestão: Package: captool
-- Linha 2: Adicionar um terceiro número à versão (patch) permite indicar pequenas correções e melhorias sem alterar a funcionalidade principal.  Isso segue convenções de versionamento semântico (SemVer) mais comuns.
+- Linha 2: Adicionar um terceiro número (patch version) ajuda a indicar pequenas correções ou atualizações sem grandes mudanças na funcionalidade.  É uma prática comum no versionamento semântico.
   Original: Version: 1.0
-  Sugestão: Version: 1.0.0
-- Linha 3: A seção "base" é muito genérica. "net" ou "networking" seria mais apropriado, indicando que o pacote está relacionado a redes.
+  Sugestão: Version: 1.0.0  (ou Version: 1.0.1, se houver correções)
+- Linha 3: "base" é uma seção muito genérica. "net" (para ferramentas de rede) ou "utils" (para utilitários) seriam mais apropriados, dependendo do foco principal da ferramenta.  Consulte a documentação do Debian para as seções disponíveis.
   Original: Section: base
-  Sugestão: Section: net
-- Linha 4: Sem alterações. A prioridade opcional é adequada para uma ferramenta como essa.
+  Sugestão: Section: net (ou Section: utils)
+- Linha 4: Sem alterações. "optional" é uma prioridade razoável.
   Original: Priority: optional
   Sugestão: Priority: optional
-- Linha 5: Sem alterações. "all" indica que o pacote é independente da arquitetura do sistema.
+- Linha 5: Sem alterações. "all" indica que o pacote é independente da arquitetura, o que é apropriado para scripts Python.
   Original: Architecture: all
   Sugestão: Architecture: all
-- Linha 6: Se o seu código Python utiliza a biblioteca `scapy` (que é comum em ferramentas de análise de rede), é importante adicionar `python3-scapy` como dependência.  Isso garante que a biblioteca estará instalada quando o pacote for instalado.  Se `scapy` não for usada, essa sugestão não se aplica.
+- Linha 6: Se o código Python usar a biblioteca `scapy` (comum para manipulação de pacotes), ela deve ser adicionada às dependências.  É crucial listar todas as dependências para garantir que o pacote funcione corretamente após a instalação.  Verifique o código para outras dependências Python.
   Original: Depends: python3, aircrack-ng
-  Sugestão: Depends: python3, aircrack-ng, python3-scapy
+  Sugestão: Depends: python3, aircrack-ng, python3-scapy (se usar scapy)
 - Linha 7: Sem alterações. Informações de contato do mantenedor são importantes.
   Original: Maintainer: Gabriel Sousa <contato@gabrielsousa.dev>
   Sugestão: Maintainer: Gabriel Sousa <contato@gabrielsousa.dev>
-- Linha 8: Pequena correção gramatical para melhor fluidez.
+- Linha 8: Pequena alteração na redação para melhor fluidez e precisão.
   Original: Description: Ferramenta de captura e quebra de senha Wi-Fi
-  Sugestão: Description: Ferramenta para captura e quebra de senhas Wi-Fi
-- Linha 9: Adicionar mais detalhes sobre as funcionalidades da ferramenta na descrição ajuda os usuários a entenderem o que ela faz.  Se a ferramenta tiver análise de tráfego e geração de relatórios, é bom mencionar. Se não tiver, remova essa parte da sugestão.
+  Sugestão: Description: Ferramenta para captura de pacotes Wi-Fi e tentativa de quebra de senhas.
+- Linha 9: 
   Original: Uma ferramenta para capturar pacotes Wi-Fi e tentar quebrar senhas usando aircrack-ng.
-  Sugestão: Ferramenta para capturar pacotes Wi-Fi e tentar quebrar senhas usando aircrack-ng.  Inclui funcionalidades para análise de tráfego e geração de relatórios.
+  Sugestão: Captura pacotes de rede sem fio e utiliza o aircrack-ng para tentar quebrar senhas WEP/WPA/WPA2.  Inclui funcionalidades para [listar funcionalidades principais, ex: handshake capture, etc.].
 
 ### CapTool\captool\DEBIAN\postinst
 - Linhas totais: 31
@@ -184,9 +202,9 @@
 - Complexidade: 0.0
 
 #### Sugestões de Melhoria
-- Linha 0: Sem alterações.
-  Original: `echo "script $0 chamado com argumento desconhecido \`$1'"` >&2
-  Sugestão: `echo "Erro: script $0 chamado com argumento descon
+- Linha 0: Embora não faça nada, adicionar um log pode ser útil para depuração: `abort-upgrade|abort-remove|abort-deconfigure)
+  Original: `abort-upgrade|abort-remove|abort-deconfigure)`
+  Sugestão: `abort-upgrade|abort-remove|abort-deconfigure)` (Adicionar um log)
 
 ### CapTool\captool\usr\bin\wifi_capture.sh
 - Linhas totais: 161
@@ -197,39 +215,42 @@
 - Complexidade: 0.0
 
 #### Sugestões de Melhoria
-- Linha 3: Habilita o tratamento de erros mais rigoroso. `-e`: sai imediatamente se um comando falhar. `-u`: trata variáveis não definidas como erros. `-o pipefail`: faz com que um pipeline retorne um código de erro se qualquer comando no pipeline falhar.
+- Linha 3: Usar `#!/usr/bin/env bash` torna o script mais portátil, pois ele procura o interpretador bash no `PATH` do usuário, em vez de assumir que ele está em `/bin/bash`.
   Original: `#!/bin/bash`
-  Sugestão: `#!/bin/bash -euo pipefail`
-- Linha 6: Sem alteração, mas considere adicionar um comentário explicando o propósito da função.
+  Sugestão: `#!/usr/bin/env bash`
+- Linha 6: Sem alteração. O nome da função é adequado.
   Original: `check_dependencies() {`
   Sugestão: `check_dependencies() {`
-- Linha 8: Sem alteração, mas considere adicionar um comentário explicando o que são essas dependências.
+- Linha 7: Sem alteração. A lista de dependências está clara.
   Original: `local dependencies=("airmon-ng" "airodump-ng" "aireplay-ng" "aircrack-ng" "john")`
   Sugestão: `local dependencies=("airmon-ng" "airodump-ng" "aireplay-ng" "aircrack-ng" "john")`
-- Linha 9: Aspas duplas em `$cmd` para evitar problemas com nomes de comandos que contenham espaços ou caracteres especiais (embora improvável neste caso).
+- Linha 9: Colocar `$cmd` entre aspas previne problemas se o nome do comando contiver espaços ou caracteres especiais.
   Original: `if ! command -v $cmd &> /dev/null; then`
   Sugestão: `if ! command -v "$cmd" &> /dev/null; then`
-- Linha 14: Sem alteração, mas considere adicionar um comentário explicando o propósito da função.
-  Original: `select_wifi_interface() {`
-  Sugestão: `select_wifi_interface() {`
-- Linha 15: Remove os dois pontos (:) dos nomes das interfaces. Isso pode simplificar o uso posterior.
+- Linha 10: Redirecionar a mensagem de erro para `stderr` (`>&2`) é uma boa prática, pois permite que o usuário distinga entre mensagens de erro e saída normal do script.
+  Original: `echo "Erro: $cmd não está instalado."`
+  Sugestão: `echo "Erro: $cmd não está instalado." >&2`
+- Linha 17: Adicionar `| tr '\n' ' '` transforma a saída do `awk` em uma única linha separada por espaços. Isso é útil para o loop `select` funcionar corretamente se houver múltiplas interfaces.
   Original: `local interfaces=$(iwconfig 2>/dev/null | awk '/IEEE 802.11/ {print $1}')`
-  Sugestão: `local interfaces=$(iwconfig 2>/dev/null | awk '/IEEE 802.11/ {print $1}' | tr -d ':')`
-- Linha 21: Sem alteração, mas considere adicionar um comentário explicando o que o comando `select` faz.
+  Sugestão: `local interfaces=$(iwconfig 2>/dev/null | awk '/IEEE 802.11/ {print $1}' | tr '\n' ' ')`
+- Linha 22: Sem alteração. O loop `select` é uma boa maneira de apresentar as opções ao usuário.
   Original: `select interface in $interfaces; do`
   Sugestão: `select interface in $interfaces; do`
-- Linha 23: Sem alteração, mas considere adicionar um comentário explicando o que está sendo impresso.
-  Original: `echo "Placa de rede Wi-Fi selecionada: $interface"`
-  Sugestão: `echo "Placa de rede Wi-Fi selecionada: $interface"`
-- Linha 24: Aspas duplas para evitar problemas com espaços ou outros caracteres especiais no nome da interface.
+- Linha 24: Colocar `$interface` entre aspas previne problemas se o nome da interface contiver espaços ou caracteres especiais.
   Original: `echo $interface`
   Sugestão: `echo "$interface"`
-- Linha 31: Sem alteração, mas considere adicionar um comentário explicando o propósito da função.
-  Original: `start_capture() {`
-  Sugestão: `start_capture() {`
-- Linha 37: 
-  Original: `if [[ -z $interface || -z $bssid || -z $channel || -z $file_name ]]; then`
-  Sugestão: `if [[ -z "$interface" || -z "$bssid" || -z "$channel"
+- Linha 37: Colocar `$interface` entre aspas previne problemas se o nome da interface contiver espaços ou caracteres especiais.
+  Original: `sudo airmon-ng start $interface`
+  Sugestão: `sudo airmon-ng start "$interface"`
+- Linha 40: Colocar `$channel`, `$bssid` e `$file_name` entre aspas previne problemas se esses valores contiverem espaços ou caracteres especiais.
+  Original: `sudo airodump-ng -c $channel --bssid $bssid -w $file_name "${interface}mon" --ignore-negative-one &`
+  Sugestão: `sudo airodump-ng -c "$channel" --bssid "$bssid" -w "$file_name" "${interface}mon" --ignore-negative-one &`
+- Linha 46: A mensagem "1 handshake" pode variar dependendo da versão do `aircrack-ng`. A mensagem "handshake completed" é mais genérica e confiável.
+  Original: `if aircrack-ng -a 2 -w /dev/null "${file_name}-01.cap" | grep -q "1 handshake"; then`
+  Sugestão: `if aircrack-ng -a 2 -w /dev/null "${file_name}-01.cap" | grep -q "handshake completed"; then`
+- Linha 54: 
+  Original: `sudo airmon-ng stop "${interface}mon"`
+  Sugestão: `sudo airmon-ng stop "${interface}mon"`
 
 ### CapTool\captool\usr\bin\wifi_capture_gui.py
 - Linhas totais: 104
@@ -240,39 +261,39 @@
 - Complexidade: 20.0
 
 #### Sugestões de Melhoria
-- Linha 6: Adiciona type hints para melhorar a legibilidade e ajudar ferramentas de análise estática.  O `-> None` indica que a função não retorna nada explicitamente.
-  Original: `def run_command(command, *args, output_widget=None):`
-  Sugestão: `def run_command(command: str, *args: str, output_widget: tk.Text = None) -> None:`
-- Linha 7: Sem alteração. Mas considere adicionar um comentário explicando o que o bloco `try` está tentando fazer, como "Executa o comando e captura erros".
-  Original: `try:`
-  Sugestão: `try:`
-- Linha 8: Adiciona `text=True` para que `stdout` e `stderr` já retornem strings, evitando a necessidade de decodificar com `decode('utf-8')`.
+- Linha 6: Adicionar `text=True` simplifica o tratamento da saída, eliminando a necessidade de decodificar explicitamente com `decode('utf-8')`.
   Original: `result = subprocess.run([command, *args], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)`
   Sugestão: `result = subprocess.run([command, *args], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)`
-- Linha 9: Remove a decodificação, pois `text=True` já cuida disso.
+- Linha 7: Como `text=True` foi adicionado no `subprocess.run`, `result.stdout` já é uma string.
   Original: `output = result.stdout.decode('utf-8') + '\n'`
   Sugestão: `output = result.stdout + '\n'`
-- Linha 11: Remove a decodificação, pois `text=True` já cuida disso.
+- Linha 9: Como `text=True` foi adicionado no `subprocess.run`, `result.stderr` já é uma string.
   Original: `output += result.stderr.decode('utf-8') + '\n'`
   Sugestão: `output += result.stderr + '\n'`
-- Linha 13: Sem alteração. Mas considere adicionar um `output_widget.see(tk.END)` para rolar automaticamente para o final do texto.
-  Original: `output_widget.insert(tk.END, output)`
-  Sugestão: `output_widget.insert(tk.END, output)`
-- Linha 17: Sem alteração. Mas considere adicionar logging para registrar o erro em um arquivo, além de exibir a mensagem na interface.
-  Original: `except subprocess.CalledProcessError as e:`
-  Sugestão: `except subprocess.CalledProcessError as e:`
-- Linha 20: Sem alteração. Mas considere usar um caminho absoluto para o script `wifi_script.sh` para evitar problemas se o diretório de trabalho mudar.
-  Original: `run_command('./wifi_script.sh', 'select_wifi_interface', output_widget=output_text)`
-  Sugestão: `run_command('./wifi_script.sh', 'select_wifi_interface', output_widget=output_text)`
-- Linha 25: Adiciona `filetypes` para restringir os tipos de arquivos que o usuário pode salvar, melhorando a usabilidade.
-  Original: `file_name = filedialog.asksaveasfilename(title="Salvar captura como...", defaultextension=".cap")`
-  Sugestão: `file_name = filedialog.asksaveasfilename(title="Salvar captura como...", defaultextension=".cap", filetypes=[("Arquivo CAP", "*.cap")])`
-- Linha 27: Sem alteração. Mas considere adicionar validação dos dados de entrada (interface, BSSID, canal) antes de executar o comando.
-  Original: `run_command('./wifi_script.sh', 'start_capture', interface, bssid, channel, file_name, output_widget=output_text)`
-  Sugestão: `run_command('./wifi_script.sh', 'start_capture', interface, bssid, channel, file_name, output_widget=output_text)`
-- Linha 36: Sem alteração. Mas considere a segurança de usar `sudo`.  É melhor evitar se possível, ou pelo menos avisar o usuário sobre os
+- Linha 15: Incluir a saída de erro (`stderr`) na mensagem de erro pode fornecer informações mais detalhadas sobre o que deu errado, facilitando a depuração.  A verificação `if e.stderr else 'Nenhuma'` evita erros caso o `stderr` esteja vazio.
+  Original: `messagebox.showerror("Erro", f"Erro ao executar o comando: {e}")`
+  Sugestão: `messagebox.showerror("Erro", f"Erro ao executar o comando: {e}\nSaída do erro: {e.stderr.decode('utf-8') if e.stderr else 'Nenhuma'}")`
+- Linha 37: O argumento `-w` do `airodump-ng` foi substituído por `--write` para maior clareza e compatibilidade.
   Original: `run_command('sudo', 'airodump-ng', '-w', networks_file, '--output-format', 'csv', interface, output_widget=output_text)`
-  Sugestão: `run_command('sudo', 'airodump-ng', '-w', networks_file, '--output-format', 'csv', interface, output_widget=output_text)`
+  Sugestão: `run_command('sudo', 'airodump-ng', '--write', networks_file, '--output-format', 'csv', interface, output_widget=output_text)`
+- Linha 56: Adicionar `text=True` ao `subprocess.Popen` para simplificar o tratamento da saída.
+  Original: `result = subprocess.Popen(['sudo', 'airodump-ng', '-c', channel, '--bssid', bssid, interface],`
+  Sugestão: `result = subprocess.Popen(['sudo', 'airodump-ng', '-c', channel, '--bssid', bssid, interface], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)`
+- Linha 59: Como `text=True` foi adicionado no `subprocess.Popen`, a linha já é uma string.
+  Original: `line = line.decode('utf-8')`
+  Sugestão: `pass` (Remover a linha)
+- Linha 62: Manter a linha, pois garante que o processo filho termine antes de prosseguir.
+  Original: `result.wait()`
+  Sugestão: `result.wait()`
+- Linha 63: Alterar para `Exception` para capturar qualquer tipo de erro que possa ocorrer durante a execução do processo, não apenas `CalledProcessError`. Isso torna o tratamento de erros mais robusto.
+  Original: `except subprocess.CalledProcessError as e:`
+  Sugestão: `except Exception as e:`
+- Linha 64: Similar à sugestão da linha 15, incluir a saída de erro para facilitar a depuração.  A verificação `if hasattr(e, 'stderr') and e.stderr else 'Nenhuma'` garante que o atributo `stderr` exista e não esteja vazio antes de tentar acessá-lo.
+  Original: `messagebox.showerror("Erro", f"Erro ao executar o comando: {e}")`
+  Sugestão: `messagebox.showerror("Erro", f"Erro ao executar o comando: {e}\nSaída do erro: {e.stderr if hasattr(e, 'stderr') and e.stderr else 'Nenhuma'}")`
+- Linha 74: 
+  Original: `if
+  Sugestão: 
 
 ### CapTool\captool\usr\share\applications\captool.desktop
 - Linhas totais: 9
@@ -283,25 +304,31 @@
 - Complexidade: 0.0
 
 #### Sugestões de Melhoria
-- Linha 3: Adicionar uma breve descrição no nome torna mais fácil identificar a ferramenta em menus e lançadores.
+- Linha 3: Mantém-se o nome, parece adequado.
   Original: Name=CapTool
-  Sugestão: Name=CapTool - Captura de Rede Wi-Fi
-- Linha 4: Uma descrição mais concisa e profissional.  Evita a repetição do nome "captool" e foca na funcionalidade.
+  Sugestão: Name=CapTool
+- Linha 4: A redação foi ligeiramente ajustada para melhor clareza e formalidade.
   Original: Comment=Ferramenta captool para captura de rede Wi-Fi
-  Sugestão: Comment=Captura e análise de pacotes de rede Wi-Fi.
-- Linha 5: Usar `pkexec` em vez de `sudo` é uma prática mais segura e recomendada para aplicações gráficas que precisam de privilégios de administrador. `pkexec` permite que o usuário forneça a senha através de uma janela gráfica, em vez de exigir que a aplicação seja executada permanentemente com privilégios de root.  **Importante:** Certifique-se de que o `captool` esteja configurado corretamente para ser executado com `pkexec`.  Isso geralmente envolve criar um arquivo de política para o `pkexec`.
+  Sugestão: Comment=Ferramenta para captura de pacotes em redes Wi-Fi
+- Linha 5: Substituir `sudo` por `pkexec` é mais seguro e recomendado para aplicações gráficas que necessitam de privilégios de administrador. `pkexec` permite que a aplicação solicite privilégios ao usuário através de uma caixa de diálogo gráfica, em vez de exigir que o usuário execute a aplicação inteira com `sudo`.  É importante configurar o `pkexec` corretamente para o `captool` para garantir a segurança.  Se o `captool` não foi projetado para ser executado com `pkexec`, manter `sudo` e garantir que o usuário tenha permissão para executar o comando sem senha no `sudoers`.
   Original: Exec=sudo /usr/local/bin/captool
   Sugestão: Exec=pkexec /usr/local/bin/captool
-- Linha 6: Especificar o caminho completo para o ícone é mais confiável, especialmente se o ícone não estiver no caminho de busca padrão.  Além disso, usar um ícone vetorial (SVG) garante que ele seja escalável e tenha boa aparência em diferentes tamanhos de tela.  Se você não tiver um ícone SVG, use um PNG e especifique o caminho completo para ele.  A estrutura `/usr/share/icons/hicolor/scalable/apps/` é uma convenção comum para ícones de aplicativos.
+- Linha 6: É melhor especificar o caminho completo para o ícone.  O sistema procurará o ícone em vários diretórios, mas especificar o caminho completo garante que o ícone correto seja usado.  A sugestão assume que o ícone é um arquivo SVG localizado no diretório padrão de ícones. Ajuste o caminho e a extensão do arquivo conforme necessário. Se o ícone estiver em um formato diferente (por exemplo, PNG), ajuste a extensão e o diretório apropriadamente.
   Original: Icon=captool-icon
   Sugestão: Icon=/usr/share/icons/hicolor/scalable/apps/captool-icon.svg
-- Linha 8: Sem alterações. Esta linha está correta.
+- Linha 7: Mantém-se o valor.  Faz sentido que a ferramenta não precise de um terminal.
+  Original: Terminal=false
+  Sugestão: Terminal=false
+- Linha 8: Mantém-se o valor.
   Original: Type=Application
   Sugestão: Type=Application
-- Linha 9: Adicionar mais categorias torna mais fácil encontrar a ferramenta em menus e lançadores. "Security" e "Utility" são categorias relevantes para uma ferramenta de captura de rede.
+- Linha 9: Adicionar a categoria "Security" (Segurança) é apropriado, pois a ferramenta lida com captura de pacotes, que está relacionada à segurança de redes.  Isso ajuda a organizar a aplicação em menus e iniciadores.
   Original: Categories=Network;
-  Sugestão: Categories=Network;Security;Utility;
-- Linha 10: Adicionar `StartupNotify=true` permite que o ambiente de desktop mostre um indicador visual (como um ícone girando) enquanto a aplicação está sendo iniciada, dando feedback ao usuário.
-  Original: (linha vazia)
+  Sugestão: Categories=Network;Security;
+- Linha 10: Adicionar `StartupNotify=true` permite que o ambiente de desktop mostre um indicador visual de que a aplicação está sendo iniciada. Isso melhora a experiência do usuário, especialmente se a aplicação demorar um pouco para iniciar.
+  Original: (linha inexistente)
   Sugestão: StartupNotify=true
+- Linha 11: Se a ferramenta `captool` abre ou manipula arquivos `.pcap`, adicionar `MimeType=application/vnd.tcpdump.pcap;` permite que o sistema operacional associe a ferramenta a esse tipo de arquivo.  Assim, o usuário pode abrir arquivos `.pcap` diretamente com o `captool`.
+  Original: (linha inexistente)
+  Sugestão: MimeType=application/vnd.tcpdump.pcap;
 
