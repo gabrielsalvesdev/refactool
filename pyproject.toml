@@ -12,23 +12,25 @@ license = {file = "LICENCE"}
 authors = [
     {name = "Gabriel Alves", email = "gabriel.alves.dev@outlook.com"}
 ]
-urls = {
-    "Source" = "https://github.com/gabrielsalvesdev/refactool",
-    "Bug Reports" = "https://github.com/gabrielsalvesdev/refactool/issues",
-    "Documentation" = "https://refactool.readthedocs.io/"
-}
-scripts = ["refactool=api.cli:main"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Natural Language :: Portuguese (Brazilian)",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Software Development :: Quality Assurance",
-]
+
+[project.urls]
+Source = "https://github.com/gabrielsalvesdev/refactool"
+"Bug Reports" = "https://github.com/gabrielsalvesdev/refactool/issues"
+Documentation = "https://refactool.readthedocs.io/"
+
+[project.scripts]
+refactool = "api.cli:main"
+
+[project.classifiers]
+"Development Status :: 4 - Beta"
+"Intended Audience :: Developers"
+"License :: OSI Approved :: MIT License"
+"Natural Language :: Portuguese (Brazilian)"
+"Operating System :: OS Independent"
+"Programming Language :: Python :: 3"
+"Programming Language :: Python :: 3.9"
+"Topic :: Software Development :: Libraries :: Python Modules"
+"Topic :: Software Development :: Quality Assurance"
 
 [tool.setuptools]
 packages = ["api"]
