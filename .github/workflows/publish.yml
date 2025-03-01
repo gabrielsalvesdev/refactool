@@ -24,13 +24,19 @@ jobs:
     - name: Construir pacote
       run: python -m build
     
+    - name: Verificar estrutura do pacote
+      run: |
+        ls -la dist/
+        twine check dist/*
+    
     - name: Publicar no TestPyPI
       env:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
         TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
       run: |
-        twine upload --skip-existing dist/*
+        echo "Tentando fazer upload para TestPyPI..."
+        twine upload --verbose --skip-existing dist/*
     
     - name: Publicar no PyPI
       if: success()  # Só executa se o TestPyPI foi bem sucedido
@@ -38,4 +44,5 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       run: |
-        twine upload dist/* 
+        echo "Tentando fazer upload para PyPI..."
+        twine upload --verbose dist/* 
