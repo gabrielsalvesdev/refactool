@@ -8,6 +8,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: Para uso  # Adicionando o ambiente onde o token está configurado
     steps:
     - uses: actions/checkout@v4
     
