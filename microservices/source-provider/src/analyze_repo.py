@@ -33,8 +33,12 @@ def load_config(config_file: str = None) -> dict:
             return {**DEFAULT_CONFIG, **json.load(f)}
     return DEFAULT_CONFIG
 
-async def setup_ai_provider(config: dict) -> AIAnalyzer:
+async def setup_ai_provider(config: dict, provider_override: str = None) -> AIAnalyzer:
     """Configura o provedor de IA baseado nas configurações."""
+    # Se o provedor foi especificado via linha de comando, use-o
+    if provider_override:
+        config['ai_provider'] = provider_override
+    
     # Tenta usar Gemini se a chave estiver disponível
     if os.getenv("GEMINI_API_KEY"):
         provider = GeminiProvider(
@@ -165,6 +169,7 @@ async def main():
     parser = argparse.ArgumentParser(description='Analisa um repositório do GitHub.')
     parser.add_argument('url', help='URL do repositório')
     parser.add_argument('-o', '--output', help='Arquivo de saída')
+    parser.add_argument('--provider', choices=['gemini', 'openai', 'deepseek', 'ollama'], help='Provedor de IA a ser usado')
     args = parser.parse_args()
     
     # Configura o logger
@@ -200,7 +205,7 @@ async def main():
         
         # Configura os analisadores
         config = load_config()
-        ai_analyzer = await setup_ai_provider(config)
+        ai_analyzer = await setup_ai_provider(config, args.provider)
         code_analyzer = CodeAnalyzer()
         
         # Cria o analisador principal
