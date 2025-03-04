@@ -90,7 +90,10 @@ class CodeAnalyzer:
         '.scala': 'Scala',
         '.r': 'R',
         '.m': 'Objective-C',
-        '.h': 'C/C++ Header'
+        '.h': 'C/C++ Header',
+        '.txt': 'Text',
+        '.md': 'Markdown',
+        '.rst': 'reStructuredText'
     }
     
     def analyze_file(self, content: str, file_ext: str) -> CodeAnalysis:
@@ -102,267 +105,262 @@ class CodeAnalyzer:
             file_ext: Extensão do arquivo
             
         Returns:
-            Resultado da análise
+            Análise do arquivo
         """
-        try:
-            # Inicializa resultado
-            result = CodeAnalysis()
-            
-            # Análise básica de linhas
-            lines = content.split('\n')
-            result.total_lines = len(lines)
-            result.metrics.total_lines = len(lines)
-            result.metrics.blank_lines = sum(1 for line in lines if not line.strip())
-            result.metrics.code_lines = sum(1 for line in lines if line.strip())
-            
-            # Copia valores do CodeMetrics para CodeAnalysis
-            result.blank_lines = result.metrics.blank_lines
-            result.code_lines = result.metrics.code_lines
-            
-            # Análise de tamanho de linhas
-            line_lengths = [len(line) for line in lines if line.strip()]
-            if line_lengths:
-                result.metrics.max_line_length = max(line_lengths)
-                result.metrics.avg_line_length = sum(line_lengths) / len(line_lengths)
-                result.max_line_length = result.metrics.max_line_length
-                result.avg_line_length = result.metrics.avg_line_length
-            
-            # Análise específica por linguagem
-            if file_ext == '.py':
-                self._analyze_python(content, result)
-                result.complexity = result.metrics.complexity
-            
-            return result
-            
-        except Exception as e:
-            logger.error(
-                "code_analyzer.analysis_failed",
-                error=str(e),
-                error_type=type(e).__name__
-            )
-            return CodeAnalysis()
+        # Detecta a linguagem
+        language = self.LANGUAGE_EXTENSIONS.get(file_ext.lower(), 'Unknown')
+        
+        # Se for um arquivo de texto, usa a análise de texto
+        if language in ['Text', 'Markdown', 'reStructuredText']:
+            return self.analyze_text(content, language)
+        
+        # Para arquivos de código, faz a análise específica da linguagem
+        if language == 'Python':
+            return self._analyze_python(content, file_ext)
+        elif language in ['JavaScript', 'TypeScript']:
+            return self._analyze_javascript(content, file_ext)
+        else:
+            # Para outras linguagens, faz uma análise básica
+            return self._analyze_generic(content, file_ext)
     
-    def _analyze_python(self, content: str, result: CodeAnalysis) -> None:
-        """Analisa código Python."""
+    def analyze_text(self, content: str, language: str = 'Text') -> CodeAnalysis:
+        """
+        Analisa um arquivo de texto.
+        
+        Args:
+            content: Conteúdo do arquivo
+            language: Linguagem do arquivo
+            
+        Returns:
+            Análise do arquivo
+        """
+        # Divide o conteúdo em linhas
+        lines = content.split('\n')
+        
+        # Calcula métricas básicas
+        total_lines = len(lines)
+        blank_lines = sum(1 for line in lines if not line.strip())
+        code_lines = total_lines - blank_lines
+        
+        # Calcula métricas de linha
+        line_lengths = [len(line) for line in lines]
+        max_line_length = max(line_lengths) if line_lengths else 0
+        avg_line_length = sum(line_lengths) / total_lines if total_lines > 0 else 0
+        
+        # Cria a análise
+        analysis = CodeAnalysis(
+            language=language,
+            total_lines=total_lines,
+            code_lines=code_lines,
+            blank_lines=blank_lines,
+            max_line_length=max_line_length,
+            avg_line_length=avg_line_length,
+            complexity=0.0,  # Arquivos de texto não têm complexidade
+            functions=[],    # Arquivos de texto não têm funções
+            classes=[]       # Arquivos de texto não têm classes
+        )
+        
+        # Atualiza as métricas
+        analysis.metrics = CodeMetrics(
+            total_lines=total_lines,
+            blank_lines=blank_lines,
+            code_lines=code_lines,
+            max_line_length=max_line_length,
+            avg_line_length=avg_line_length,
+            complexity=0.0
+        )
+        
+        return analysis
+    
+    def _analyze_python(self, content: str, file_ext: str) -> CodeAnalysis:
+        """Analisa um arquivo Python."""
         try:
+            # Parse o código
             tree = ast.parse(content)
             
-            # Análise de funções
-            result.functions = [
-                node.name
-                for node in ast.walk(tree)
-                if isinstance(node, ast.FunctionDef)
-            ]
-            result.total_functions = len(result.functions)
+            # Calcula métricas básicas
+            lines = content.split('\n')
+            total_lines = len(lines)
+            blank_lines = sum(1 for line in lines if not line.strip())
+            code_lines = total_lines - blank_lines
             
-            # Análise de classes
-            result.classes = [
-                node.name
-                for node in ast.walk(tree)
-                if isinstance(node, ast.ClassDef)
-            ]
-            result.total_classes = len(result.classes)
+            # Calcula métricas de linha
+            line_lengths = [len(line) for line in lines]
+            max_line_length = max(line_lengths) if line_lengths else 0
+            avg_line_length = sum(line_lengths) / total_lines if total_lines > 0 else 0
             
-            # Análise de complexidade
-            result.metrics.complexity = self._calculate_complexity(tree)
+            # Extrai funções e classes
+            functions = []
+            classes = []
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    functions.append(node.name)
+                elif isinstance(node, ast.ClassDef):
+                    classes.append(node.name)
+            
+            # Calcula complexidade
+            complexity = self._calculate_complexity(tree)
+            
+            # Cria a análise
+            analysis = CodeAnalysis(
+                language='Python',
+                total_lines=total_lines,
+                code_lines=code_lines,
+                blank_lines=blank_lines,
+                max_line_length=max_line_length,
+                avg_line_length=avg_line_length,
+                complexity=complexity,
+                functions=functions,
+                classes=classes
+            )
+            
+            # Atualiza as métricas
+            analysis.metrics = CodeMetrics(
+                total_lines=total_lines,
+                blank_lines=blank_lines,
+                code_lines=code_lines,
+                max_line_length=max_line_length,
+                avg_line_length=avg_line_length,
+                complexity=complexity
+            )
+            
+            return analysis
             
         except Exception as e:
-            logger.error(
-                "code_analyzer.python_analysis_failed",
-                error=str(e),
-                error_type=type(e).__name__
-            )
+            logger.error(f"Erro ao analisar arquivo Python: {str(e)}")
+            return self._analyze_generic(content, file_ext)
+    
+    def _analyze_javascript(self, content: str, file_ext: str) -> CodeAnalysis:
+        """Analisa um arquivo JavaScript/TypeScript."""
+        # Por enquanto, faz uma análise genérica
+        return self._analyze_generic(content, file_ext)
+    
+    def _analyze_generic(self, content: str, file_ext: str) -> CodeAnalysis:
+        """Faz uma análise genérica de um arquivo."""
+        # Divide o conteúdo em linhas
+        lines = content.split('\n')
+        
+        # Calcula métricas básicas
+        total_lines = len(lines)
+        blank_lines = sum(1 for line in lines if not line.strip())
+        code_lines = total_lines - blank_lines
+        
+        # Calcula métricas de linha
+        line_lengths = [len(line) for line in lines]
+        max_line_length = max(line_lengths) if line_lengths else 0
+        avg_line_length = sum(line_lengths) / total_lines if total_lines > 0 else 0
+        
+        # Detecta funções e classes usando regex
+        functions = self._detect_functions(content)
+        classes = self._detect_classes(content)
+        
+        # Calcula complexidade básica
+        complexity = self._calculate_basic_complexity(content)
+        
+        # Cria a análise
+        analysis = CodeAnalysis(
+            language=self.LANGUAGE_EXTENSIONS.get(file_ext.lower(), 'Unknown'),
+            total_lines=total_lines,
+            code_lines=code_lines,
+            blank_lines=blank_lines,
+            max_line_length=max_line_length,
+            avg_line_length=avg_line_length,
+            complexity=complexity,
+            functions=functions,
+            classes=classes
+        )
+        
+        # Atualiza as métricas
+        analysis.metrics = CodeMetrics(
+            total_lines=total_lines,
+            blank_lines=blank_lines,
+            code_lines=code_lines,
+            max_line_length=max_line_length,
+            avg_line_length=avg_line_length,
+            complexity=complexity
+        )
+        
+        return analysis
     
     def _calculate_complexity(self, tree: ast.AST) -> float:
-        """Calcula a complexidade do código."""
-        complexity = 0
+        """Calcula a complexidade ciclomática de um AST Python."""
+        complexity = 1  # Complexidade base
         
         for node in ast.walk(tree):
-            # Incrementa para cada estrutura de controle
-            if isinstance(node, (ast.If, ast.For, ast.While, ast.Try)):
+            if isinstance(node, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.AsyncWith)):
                 complexity += 1
-            # Incrementa para cada operador booleano
             elif isinstance(node, ast.BoolOp):
                 complexity += len(node.values) - 1
+            elif isinstance(node, ast.ExceptHandler):
+                complexity += 1
         
         return complexity
     
-    def _analyze_methods(self, file_path: str, tree: ast.AST) -> List[CodeSmell]:
-        """Analisa métodos buscando problemas comuns."""
-        smells = []
+    def _calculate_basic_complexity(self, content: str) -> float:
+        """Calcula uma complexidade básica baseada em estruturas de controle."""
+        complexity = 1  # Complexidade base
         
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                # Verifica tamanho do método
-                method_lines = node.end_lineno - node.lineno
-                if method_lines > self.config.max_method_lines:
-                    smells.append(CodeSmell(
-                        type=CodeSmellType.LONG_METHOD,
-                        file=file_path,
-                        line=node.lineno,
-                        message=f"Método muito longo ({method_lines} linhas)",
-                        severity=2,
-                        suggestion="Divida o método em funções menores e mais específicas"
-                    ))
-                
-                # Verifica número de parâmetros
-                params = len(node.args.args)
-                if params > self.config.max_parameters:
-                    smells.append(CodeSmell(
-                        type=CodeSmellType.LONG_PARAMETER_LIST,
-                        file=file_path,
-                        line=node.lineno,
-                        message=f"Método com muitos parâmetros ({params})",
-                        severity=1,
-                        suggestion="Agrupe parâmetros relacionados em uma classe ou use padrão Builder"
-                    ))
-                
-                # Análise de complexidade ciclomática
-                complexity = self._calculate_complexity(node)
-                if complexity > self.config.max_complexity:
-                    smells.append(CodeSmell(
-                        type=CodeSmellType.HIGH_COMPLEXITY,
-                        file=file_path,
-                        line=node.lineno,
-                        message=f"Complexidade muito alta ({complexity})",
-                        severity=3,
-                        suggestion="Simplifique o método dividindo em partes menores"
-                    ))
+        # Padrões de estruturas de controle
+        patterns = [
+            r'\bif\b', r'\belif\b', r'\belse\b',
+            r'\bfor\b', r'\bwhile\b', r'\bdo\b',
+            r'\bswitch\b', r'\bcase\b',
+            r'\bcatch\b', r'\bfinally\b',
+            r'\b&&\b', r'\b\|\|\b'
+        ]
         
-        return smells
+        for pattern in patterns:
+            matches = re.finditer(pattern, content)
+            complexity += sum(1 for _ in matches)
+        
+        return complexity
     
-    def _analyze_classes(self, file_path: str, tree: ast.AST) -> List[CodeSmell]:
-        """Analisa classes buscando problemas de design."""
-        smells = []
+    def _detect_functions(self, content: str) -> List[str]:
+        """Detecta funções no código usando regex."""
+        functions = []
         
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                # Verifica tamanho da classe
-                class_lines = node.end_lineno - node.lineno
-                if class_lines > self.config.max_class_lines:
-                    smells.append(CodeSmell(
-                        type=CodeSmellType.LARGE_CLASS,
-                        file=file_path,
-                        line=node.lineno,
-                        message=f"Classe muito grande ({class_lines} linhas)",
-                        severity=2,
-                        suggestion="Divida a classe em classes menores com responsabilidades específicas"
-                    ))
-                
-                # Detecta Data Class
-                if self._is_data_class(node):
-                    smells.append(CodeSmell(
-                        type=CodeSmellType.DATA_CLASS,
-                        file=file_path,
-                        line=node.lineno,
-                        message="Classe apenas com getters/setters",
-                        severity=1,
-                        suggestion="Adicione comportamento à classe ou use @dataclass"
-                    ))
-                
-                # Detecta God Class
-                if self._is_god_class(node):
-                    smells.append(CodeSmell(
-                        type=CodeSmellType.GOD_CLASS,
-                        file=file_path,
-                        line=node.lineno,
-                        message="Classe com muitas responsabilidades",
-                        severity=3,
-                        suggestion="Aplique o princípio de Responsabilidade Única (SRP)"
-                    ))
+        # Padrões comuns de declaração de funções
+        patterns = [
+            r'def\s+(\w+)\s*\(',  # Python
+            r'function\s+(\w+)\s*\(',  # JavaScript
+            r'(\w+)\s*:\s*function\s*\(',  # JavaScript
+            r'(\w+)\s*=\s*function\s*\(',  # JavaScript
+            r'(\w+)\s*=\s*\([^)]*\)\s*=>',  # JavaScript arrow function
+            r'public\s+(\w+)\s+(\w+)\s*\(',  # Java
+            r'private\s+(\w+)\s+(\w+)\s*\(',  # Java
+            r'protected\s+(\w+)\s+(\w+)\s*\(',  # Java
+            r'(\w+)\s+(\w+)\s*\(',  # C/C++
+        ]
         
-        return smells
+        for pattern in patterns:
+            matches = re.finditer(pattern, content)
+            for match in matches:
+                # Pega o nome da função do grupo apropriado
+                func_name = match.group(2) if len(match.groups()) > 1 else match.group(1)
+                if func_name not in functions:
+                    functions.append(func_name)
+        
+        return functions
     
-    def _find_duplicates(self, file_path: str, content: str) -> List[CodeSmell]:
-        """Detecta código duplicado."""
-        smells = []
-        lines = content.split('\n')
+    def _detect_classes(self, content: str) -> List[str]:
+        """Detecta classes no código usando regex."""
+        classes = []
         
-        for i in range(len(lines) - self.config.min_duplicate_lines + 1):
-            chunk1 = '\n'.join(lines[i:i + self.config.min_duplicate_lines])
-            
-            for j in range(i + self.config.min_duplicate_lines, len(lines) - self.config.min_duplicate_lines + 1):
-                chunk2 = '\n'.join(lines[j:j + self.config.min_duplicate_lines])
-                similarity = self._calculate_similarity(chunk1, chunk2)
-                
-                if similarity >= self.config.min_similarity:
-                    smells.append(CodeSmell(
-                        type=CodeSmellType.DUPLICATE_CODE,
-                        file=file_path,
-                        line=i + 1,
-                        message=f"Código duplicado encontrado (similaridade: {similarity:.2f})",
-                        severity=2,
-                        suggestion="Extraia o código duplicado para um método reutilizável"
-                    ))
-                    break  # Evita reportar o mesmo trecho múltiplas vezes
+        # Padrões comuns de declaração de classes
+        patterns = [
+            r'class\s+(\w+)',  # Python
+            r'class\s+(\w+)\s*{',  # JavaScript/Java/C++
+            r'interface\s+(\w+)',  # Java/TypeScript
+            r'struct\s+(\w+)',  # C/C++
+            r'enum\s+(\w+)',  # C/C++/Java
+        ]
         
-        return smells
-    
-    def _calculate_similarity(self, text1: str, text2: str) -> float:
-        """
-        Calcula a similaridade entre dois trechos de texto usando distância de Levenshtein.
-        Retorna um valor entre 0 e 1, onde 1 significa textos idênticos.
-        """
-        if not text1 or not text2:
-            return 0.0
+        for pattern in patterns:
+            matches = re.finditer(pattern, content)
+            for match in matches:
+                class_name = match.group(1)
+                if class_name not in classes:
+                    classes.append(class_name)
         
-        # Remove espaços em branco e comentários para comparação
-        text1 = self._normalize_code(text1)
-        text2 = self._normalize_code(text2)
-        
-        if not text1 or not text2:
-            return 0.0
-        
-        # Calcula distância de Levenshtein
-        m, n = len(text1), len(text2)
-        dp = [[0] * (n + 1) for _ in range(m + 1)]
-        
-        for i in range(m + 1):
-            dp[i][0] = i
-        for j in range(n + 1):
-            dp[0][j] = j
-        
-        for i in range(1, m + 1):
-            for j in range(1, n + 1):
-                if text1[i-1] == text2[j-1]:
-                    dp[i][j] = dp[i-1][j-1]
-                else:
-                    dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
-        
-        max_len = max(m, n)
-        if max_len == 0:
-            return 1.0
-        
-        similarity = 1 - (dp[m][n] / max_len)
-        return similarity
-    
-    def _normalize_code(self, text: str) -> str:
-        """Remove espaços em branco e comentários do código."""
-        # Remove comentários
-        text = re.sub(r'#.*$', '', text, flags=re.MULTILINE)
-        
-        # Remove strings
-        text = re.sub(r'["\'].*?["\']', '""', text)
-        
-        # Remove espaços em branco
-        text = re.sub(r'\s+', ' ', text)
-        
-        return text.strip()
-    
-    def _is_data_class(self, node: ast.ClassDef) -> bool:
-        """Verifica se uma classe é apenas uma data class."""
-        methods = [n for n in node.body if isinstance(n, ast.FunctionDef)]
-        getters_setters = 0
-        
-        for method in methods:
-            if method.name.startswith(('get_', 'set_', '__get', '__set')):
-                getters_setters += 1
-        
-        return len(methods) > 0 and getters_setters == len(methods)
-    
-    def _is_god_class(self, node: ast.ClassDef) -> bool:
-        """Verifica se uma classe é uma God Class."""
-        methods = len([n for n in node.body if isinstance(n, ast.FunctionDef)])
-        attributes = len([n for n in node.body if isinstance(n, ast.AnnAssign)])
-        
-        return methods > 20 or attributes > 15 
+        return classes 

@@ -1,4 +1,43 @@
-airflow-venv/
+# Arquivos de análise
+analyses/
+analyses/*
+
+# Arquivos temporários
+temp/
+temp/*
+
+# Arquivos de ambiente
+.env
+.env.*
+
+# Arquivos Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Ambientes virtuais
+venv/
+ENV/
+env/
+.env/
+
 venv3.10/
 venv/
 __pycache__/

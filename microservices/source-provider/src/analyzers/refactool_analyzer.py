@@ -34,6 +34,8 @@ class ProjectContext:
         self.config_files: List[str] = []  # Arquivos de configuração
         self.api_definitions: List[str] = []  # Definições de API
         self.database_schemas: List[str] = []  # Esquemas de banco de dados
+        self.docs_files: List[str] = []  # Arquivos de documentação
+        self.text_files: List[str] = []  # Arquivos de texto
 
 class RefactoolAnalyzer:
     """Analisador principal do Refactool."""
@@ -56,7 +58,12 @@ class RefactoolAnalyzer:
         '.scala': 'Scala',
         '.r': 'R',
         '.m': 'Objective-C',
-        '.h': 'C/C++ Header'
+        '.h': 'C/C++ Header',
+        '.txt': 'Text',
+        '.md': 'Markdown',
+        '.rst': 'reStructuredText',
+        '.ino': 'Arduino',
+        '.ps1': 'PowerShell'
     }
     
     # Arquivos importantes para análise
@@ -96,6 +103,7 @@ class RefactoolAnalyzer:
         self._analyzed_files: Set[str] = set()
         self._analysis_results: Dict[str, List[CodeSmell]] = {}
         self._suggestions: Dict[str, List[CodeSuggestion]] = {}
+        self._file_summaries: Dict[str, str] = {}
         
         # Contexto do projeto
         self.context = ProjectContext()
@@ -142,14 +150,27 @@ class RefactoolAnalyzer:
                     analysis.file_path = relative_path
                     analysis.language = self.code_analyzer.LANGUAGE_EXTENSIONS.get(file_ext, 'Unknown')
                     
-                    # Análise do Gemini
-                    ai_suggestions = []
-                    if self.ai_analyzer:
-                        try:
-                            ai_suggestions = await self.ai_analyzer.analyze_code(relative_path, content)
-                        except Exception as e:
-                            logger.error(f"Erro na análise do Gemini para {relative_path}: {e}")
+                    # Atualiza estatísticas de linguagem
+                    language_counts[analysis.language] += 1
                     
+                    # Gera resumo para todos os arquivos
+                    try:
+                        summary = await self.ai_analyzer.analyze_text(content)
+                        self._file_summaries[relative_path] = summary
+                        if analysis.language in ['Text', 'Markdown', 'reStructuredText']:
+                            self.context.text_files.append(relative_path)
+                    except Exception as e:
+                        logger.error(f"Erro ao gerar resumo para {relative_path}: {e}")
+                    
+                    # Para arquivos de código, gera sugestões
+                    if analysis.language not in ['Text', 'Markdown', 'reStructuredText']:
+                        try:
+                            suggestions = await self.ai_analyzer.analyze_code(content, analysis.language)
+                            self._suggestions[relative_path] = suggestions
+                        except Exception as e:
+                            logger.error(f"Erro ao gerar sugestões para {relative_path}: {e}")
+                    
+                    # Atualiza métricas
                     analysis.total_lines = analysis.code_lines
                     analysis.blank_lines = analysis.code_lines - analysis.code_lines
                     analysis.max_line_length = analysis.max_line_length
@@ -157,15 +178,13 @@ class RefactoolAnalyzer:
                     analysis.complexity = analysis.complexity
                     analysis.functions = analysis.functions if isinstance(analysis.functions, list) else []
                     analysis.classes = analysis.classes if isinstance(analysis.classes, list) else []
-                    analysis.ai_suggestions = [suggestion.to_dict() for suggestion in ai_suggestions] if ai_suggestions else []
                     
                     # Adiciona à lista de análises
                     file_analyses.append(analysis)
                     total_files += 1
                     total_lines += analysis.code_lines
-                    total_functions += len(analysis.functions) if isinstance(analysis.functions, list) else analysis.functions or 0
-                    total_classes += len(analysis.classes) if isinstance(analysis.classes, list) else analysis.classes or 0
-                    language_counts[analysis.language or 'Unknown'] += 1
+                    total_functions += len(analysis.functions)
+                    total_classes += len(analysis.classes)
                     
                 except Exception as e:
                     logger.error(f"Erro ao analisar {file_path}: {e}")
@@ -177,7 +196,7 @@ class RefactoolAnalyzer:
         # Visão Geral
         report += "## Visão Geral\n"
         report += f"- Total de arquivos: {total_files}\n"
-        report += f"- Total de linhas de código: {total_lines}\n"
+        report += f"- Total de linhas: {total_lines}\n"
         report += f"- Total de funções: {total_functions}\n"
         report += f"- Total de classes: {total_classes}\n\n"
         
@@ -191,30 +210,43 @@ class RefactoolAnalyzer:
         report += "## Análises de Arquivos\n\n"
         for analysis in file_analyses:
             report += f"### {analysis.file_path}\n"
+            report += f"- Linguagem: {analysis.language}\n"
             report += f"- Linhas totais: {analysis.total_lines}\n"
             report += f"- Linhas em branco: {analysis.blank_lines}\n"
-            report += f"- Linhas de código: {analysis.code_lines}\n"
+            report += f"- Linhas de conteúdo: {analysis.code_lines}\n"
             report += f"- Tamanho máximo de linha: {analysis.max_line_length}\n"
             report += f"- Tamanho médio de linha: {analysis.avg_line_length:.1f}\n"
-            report += f"- Complexidade: {analysis.complexity:.1f}\n"
             
-            # Adiciona as sugestões do Gemini
-            if analysis.ai_suggestions:
-                report += "\n#### Sugestões de Melhoria\n"
-                for suggestion in analysis.ai_suggestions:
-                    report += f"- Linha {suggestion['line']}: {suggestion['explanation']}\n"
-                    report += f"  Original: {suggestion['original_code']}\n"
-                    report += f"  Sugestão: {suggestion['suggested_code']}\n"
+            # Adiciona complexidade apenas para arquivos de código
+            if analysis.language not in ['Text', 'Markdown', 'reStructuredText']:
+                report += f"- Complexidade: {analysis.complexity:.1f}\n"
+            
+            # Adiciona resumo para todos os arquivos
+            if analysis.file_path in self._file_summaries:
+                report += "\n#### Resumo do Arquivo\n"
+                report += self._file_summaries[analysis.file_path] + "\n"
+            
+            # Adiciona sugestões para arquivos de código
+            if analysis.file_path in self._suggestions:
+                suggestions = self._suggestions[analysis.file_path]
+                if suggestions:
+                    report += "\n#### Sugestões de Melhoria\n"
+                    for suggestion in suggestions:
+                        report += f"- Linha {suggestion.line}: {suggestion.message}\n"
+                        if suggestion.suggested_code:
+                            report += f"  Sugestão: {suggestion.suggested_code}\n"
+                        if suggestion.explanation:
+                            report += f"  Explicação: {suggestion.explanation}\n"
+            
             report += "\n"
         
         return report
-
+    
     def _should_analyze_file(self, file_path: str) -> bool:
         """Verifica se um arquivo deve ser analisado."""
         # Ignora arquivos binários conhecidos
         file_ext = os.path.splitext(file_path)[1].lower()
-        if file_ext in {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.exe', '.dll',
-                       '.so', '.dylib', '.pyc', '.pyo', '.deb'}:
+        if file_ext in self.BINARY_EXTENSIONS:
             return False
             
         # Ignora arquivos do git

@@ -80,7 +80,8 @@ async def setup_ai_provider(config: dict, provider_override: str = None) -> AIAn
 async def analyze_repository(
     repo_url: str,
     output_file: str = None,
-    config_file: str = None
+    config_file: str = None,
+    provider: str = None
 ) -> str:
     """
     Analisa um repositório do GitHub.
@@ -89,166 +90,103 @@ async def analyze_repository(
         repo_url: URL do repositório
         output_file: Arquivo para salvar o relatório (opcional)
         config_file: Arquivo de configuração (opcional)
+        provider: Provedor de IA a ser usado (opcional)
         
     Returns:
         Relatório da análise
     """
     github = None
+    temp_dir = None
     try:
         # Carrega configuração
         config = load_config(config_file)
         
-        # Configura logging
-        structlog.configure(
-            processors=[
-                structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S"),
-                structlog.processors.format_exc_info,
-                structlog.dev.ConsoleRenderer()
-            ]
-        )
+        # Configura o provedor de IA
+        ai_analyzer = await setup_ai_provider(config, provider)
         
-        # Prepara diretório temporário
-        repo_name = repo_url.split('/')[-1]
-        temp_dir = os.path.join(config["temp_dir"], repo_name)
+        # Configura o analisador de código
+        code_analyzer = CodeAnalyzer()
         
-        # Limpa diretório temporário se existir
-        if os.path.exists(temp_dir):
-            try:
-                shutil.rmtree(temp_dir, onerror=remove_readonly)
-            except Exception as e:
-                logger.error(f"Erro ao limpar diretório temporário: {str(e)}")
-                
-        # Cria diretório temporário
-        os.makedirs(temp_dir, exist_ok=True)
-            
-        # Clona repositório
-        github = GitHubManager()
+        # Configura o analisador do Refactool
+        refactool_analyzer = RefactoolAnalyzer(code_analyzer, ai_analyzer)
+        
+        # Configura o gerenciador do GitHub
+        github_token = os.getenv("GITHUB_TOKEN")
+        if not github_token:
+            logger.warning("Token do GitHub não encontrado. Alguns repositórios podem não ser acessíveis.")
+        
+        github = GitHubManager(token=github_token)
         await github.start()
+        
+        # Cria diretório temporário
+        repo_name = repo_url.split('/')[-1].replace('.git', '')
+        temp_dir = os.path.join('temp', repo_name)
+        
+        logger.info("Iniciando clonagem do repositório", url=repo_url, target_dir=temp_dir)
+        
+        # Clona o repositório
         await github.clone_repository(repo_url, temp_dir)
         
-        # Inicializa analisadores
-        code_analyzer = CodeAnalyzer()
-        ai_analyzer = await setup_ai_provider(config)
+        # Verifica se o diretório foi criado e tem arquivos
+        if not os.path.exists(temp_dir):
+            raise Exception(f"Diretório {temp_dir} não foi criado após clonagem")
+            
+        files = os.listdir(temp_dir)
+        if not files:
+            raise Exception(f"Diretório {temp_dir} está vazio após clonagem")
+            
+        logger.info(f"Repositório clonado com sucesso. {len(files)} arquivos encontrados.")
         
-        # Inicializa analisador principal
-        analyzer = RefactoolAnalyzer(code_analyzer, ai_analyzer)
+        # Analisa o repositório
+        logger.info("Iniciando análise do repositório")
+        report = await refactool_analyzer.analyze_project(temp_dir)
         
-        # Executa análise com timeout
-        result = await asyncio.wait_for(
-            analyzer.analyze_project(temp_dir),
-            timeout=config["timeout"]
-        )
-        
-        # Salva resultado se necessário
+        # Salva o relatório se um arquivo de saída foi especificado
         if output_file:
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
             with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(result)
-        
-        return result
-        
-    except asyncio.TimeoutError:
-        logger.error("Timeout durante análise")
-        return "Erro: A análise excedeu o tempo limite."
-    except Exception as e:
-        logger.error(f"Erro fatal: {str(e)}")
-        return f"Erro fatal: {str(e)}"
-    finally:
-        # Finaliza GitHub
-        if github:
-            await github.stop()
-            
-        # Limpa diretório temporário
-        if os.path.exists(temp_dir):
-            try:
-                shutil.rmtree(temp_dir, onerror=remove_readonly)
-            except Exception as e:
-                logger.error(f"Erro ao limpar diretório temporário: {str(e)}")
-
-async def main():
-    """Função principal."""
-    parser = argparse.ArgumentParser(description='Analisa um repositório do GitHub.')
-    parser.add_argument('url', help='URL do repositório')
-    parser.add_argument('-o', '--output', help='Arquivo de saída')
-    parser.add_argument('--provider', choices=['gemini', 'openai', 'deepseek', 'ollama'], 
-                       help='Provedor de IA a ser usado (gemini, openai, deepseek, ollama)')
-    parser.add_argument('--config', help='Arquivo de configuração opcional')
-    args = parser.parse_args()
-    
-    # Configura o logger
-    logging.basicConfig(level=logging.INFO)
-    
-    # Clona o repositório
-    target_dir = os.path.join('temp', 'captool')
-    try:
-        if os.path.exists(target_dir):
-            # Tenta remover o diretório, ignorando erros
-            for root, dirs, files in os.walk(target_dir, topdown=False):
-                for name in files:
-                    try:
-                        os.chmod(os.path.join(root, name), 0o777)
-                        os.unlink(os.path.join(root, name))
-                    except:
-                        pass
-                for name in dirs:
-                    try:
-                        os.chmod(os.path.join(root, name), 0o777)
-                        os.rmdir(os.path.join(root, name))
-                    except:
-                        pass
-            try:
-                os.rmdir(target_dir)
-            except:
-                pass
-        
-        os.makedirs(target_dir, exist_ok=True)
-        
-        repo = git.Repo.clone_from(args.url, target_dir)
-        logger.info('Repositório clonado com sucesso', target_dir=target_dir, url=args.url)
-        
-        # Configura os analisadores
-        config = load_config(args.config)
-        ai_analyzer = await setup_ai_provider(config, args.provider)
-        code_analyzer = CodeAnalyzer()
-        
-        # Cria o analisador principal
-        analyzer = RefactoolAnalyzer(code_analyzer, ai_analyzer)
-        
-        # Analisa o projeto
-        report = await analyzer.analyze_project(target_dir)
-        
-        # Salva o relatório
-        if args.output:
-            with open(args.output, 'w', encoding='utf-8') as f:
                 f.write(report)
-        else:
-            print(report)
-            
+            logger.info(f"Relatório salvo em {output_file}")
+        
+        return report
+        
     except Exception as e:
         logger.error(f"Erro durante a análise: {str(e)}")
         raise
     finally:
-        # Tenta limpar o diretório temporário
-        try:
-            if os.path.exists(target_dir):
-                for root, dirs, files in os.walk(target_dir, topdown=False):
-                    for name in files:
-                        try:
-                            os.chmod(os.path.join(root, name), 0o777)
-                            os.unlink(os.path.join(root, name))
-                        except:
-                            pass
-                    for name in dirs:
-                        try:
-                            os.chmod(os.path.join(root, name), 0o777)
-                            os.rmdir(os.path.join(root, name))
-                        except:
-                            pass
-                try:
-                    os.rmdir(target_dir)
-                except:
-                    pass
-        except:
-            pass
+        # Limpa recursos
+        if github:
+            await github.stop()
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir, onerror=remove_readonly)
+            except Exception as e:
+                logger.error(f"Erro ao remover diretório temporário: {str(e)}")
+
+def main():
+    """Função principal do script."""
+    parser = argparse.ArgumentParser(description='Analisa um repositório do GitHub')
+    parser.add_argument('repo_url', help='URL do repositório do GitHub')
+    parser.add_argument('-o', '--output', help='Arquivo para salvar o relatório')
+    parser.add_argument('-c', '--config', help='Arquivo de configuração')
+    parser.add_argument('-p', '--provider', help='Provedor de IA a ser usado')
+    
+    args = parser.parse_args()
+    
+    # Configura logging
+    logging.basicConfig(level=logging.INFO)
+    
+    # Executa a análise
+    report = asyncio.run(analyze_repository(
+        args.repo_url,
+        args.output,
+        args.config,
+        args.provider
+    ))
+    
+    # Imprime o relatório se nenhum arquivo de saída foi especificado
+    if not args.output:
+        print(report)
 
 if __name__ == '__main__':
-    asyncio.run(main()) 
+    main() 
