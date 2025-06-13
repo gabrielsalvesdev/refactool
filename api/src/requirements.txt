@@ -1,5 +1,5 @@
 h11==0.14.0
 fastapi==0.95.2
 uvicorn==0.21.1
-requests==2.27.1
+requests==2.32.4
 slowapi==0.1.4 
