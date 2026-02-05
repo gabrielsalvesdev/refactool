@@ -14,3 +14,4 @@ pytest-sugar>=0.9.7
 openai>=1.0.0  # Para o módulo de IA
 PyGithub>=2.1.0  # Para integração com GitHub
 gitpython>=3.1.0  # Para operações Git locais 
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
