@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.9-slim as builder
+FROM python:3.13.3-slim as builder
 
 WORKDIR /build
 
@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels -r requirements.txt
 
 # Final stage
-FROM python:3.9-slim
+FROM python:3.13.3-slim
 
 WORKDIR /app
 
